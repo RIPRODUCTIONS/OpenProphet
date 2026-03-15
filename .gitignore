@@ -2,6 +2,7 @@
 .env
 .mcp.json
 .claude/settings.local.json
+opencode.jsonc
 
 # Runtime config (contains account secrets - use dashboard to configure)
 data/agent-config.json

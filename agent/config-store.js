@@ -562,7 +562,28 @@ export async function addAgent(agent) {
 export async function updateAgent(id, updates) {
   const idx = _config.agents.findIndex(a => a.id === id);
   if (idx === -1) throw new Error('Agent not found');
-  _config.agents[idx] = { ..._config.agents[idx], ...updates, updatedAt: new Date().toISOString() };
+  const oldAgent = _config.agents[idx];
+  _config.agents[idx] = { ...oldAgent, ...updates, updatedAt: new Date().toISOString() };
+
+  // Propagate model/strategy changes to all sandboxes using this agent
+  const modelChanged = updates.model && updates.model !== oldAgent.model;
+  const strategyChanged = updates.strategyId !== undefined && updates.strategyId !== oldAgent.strategyId;
+
+  if (modelChanged || strategyChanged) {
+    for (const sandbox of getSandboxes()) {
+      if (sandbox.agent.activeAgentId !== id) continue;
+      if (modelChanged) {
+        _config.sandboxes[sandbox.id].agent.model = updates.model;
+      }
+      if (strategyChanged) {
+        if (_config.sandboxes[sandbox.id].agent.overrides) {
+          _config.sandboxes[sandbox.id].agent.overrides.customStrategyRules = null;
+        }
+      }
+    }
+    syncLegacyAliases(_config);
+  }
+
   await saveConfig();
   return _config.agents[idx];
 }
@@ -657,7 +678,23 @@ export async function updateSandboxAgentSelection(sandboxId, updates) {
   const sandbox = getSandbox(sandboxId);
   if (!sandbox) throw new Error('Sandbox not found');
   const nextActiveAgentId = updates.activeAgentId ?? sandbox.agent.activeAgentId;
-  if (!_config.agents.find(a => a.id === nextActiveAgentId)) throw new Error('Agent not found');
+  const newAgent = _config.agents.find(a => a.id === nextActiveAgentId);
+  if (!newAgent) throw new Error('Agent not found');
+
+  const agentChanged = nextActiveAgentId !== sandbox.agent.activeAgentId;
+  let mergedOverrides = {
+    ...(sandbox.agent?.overrides || {}),
+    ...(updates.overrides || {}),
+    heartbeatOverrides: {
+      ...(sandbox.agent?.overrides?.heartbeatOverrides || {}),
+      ...(updates.overrides?.heartbeatOverrides || {}),
+    },
+  };
+  if (agentChanged) {
+    mergedOverrides.customStrategyRules = null;
+    mergedOverrides.customSystemPrompt = null;
+    mergedOverrides.systemPromptTemplate = null;
+  }
 
   _config.sandboxes[sandboxId] = mergeSandbox({
     ...sandbox,
@@ -665,14 +702,8 @@ export async function updateSandboxAgentSelection(sandboxId, updates) {
       ...sandbox.agent,
       ...updates,
       activeAgentId: nextActiveAgentId,
-      overrides: {
-        ...(sandbox.agent?.overrides || {}),
-        ...(updates.overrides || {}),
-        heartbeatOverrides: {
-          ...(sandbox.agent?.overrides?.heartbeatOverrides || {}),
-          ...(updates.overrides?.heartbeatOverrides || {}),
-        },
-      },
+      model: agentChanged ? (newAgent.model || sandbox.agent.model) : (updates.model || sandbox.agent.model),
+      overrides: mergedOverrides,
     },
     updatedAt: new Date().toISOString(),
   }, _config);

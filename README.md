@@ -178,6 +178,7 @@ git clone https://github.com/JakeNesler/OpenProphet.git
 cd OpenProphet
 npm install
 go build -o prophet_bot ./cmd/bot
+cp opencode.example.jsonc opencode.jsonc
 ```
 
 ### 2. Configure Environment
@@ -220,7 +221,13 @@ opencode auth list
 
 #### OpenCode Configuration
 
-OpenProphet includes an `opencode.jsonc` config that registers the MCP trading tools. When the agent spawns OpenCode, it uses this config automatically. The key settings:
+OpenProphet requires an `opencode.jsonc` file in the project root to register the MCP trading tools. This file is **not included in the repo** (it's gitignored) since it may contain personal MCP servers or API keys. Create your own from the provided example:
+
+```bash
+cp opencode.example.jsonc opencode.jsonc
+```
+
+The example config registers the Prophet MCP tools server, which is all you need:
 
 ```jsonc
 // opencode.jsonc
@@ -228,18 +235,14 @@ OpenProphet includes an `opencode.jsonc` config that registers the MCP trading t
   "mcp": {
     "prophet": {
       "type": "local",
-      "command": ["node", "/path/to/OpenProphet/mcp-server.js"],
+      "command": ["node", "./mcp-server.js"],
       "enabled": true
     }
   }
 }
 ```
 
-**Update the path** in `opencode.jsonc` to match your install location. The agent harness runs OpenCode from the project root, so relative paths also work:
-
-```jsonc
-"command": ["node", "./mcp-server.js"]
-```
+You can add any additional MCP servers you use (Playwright, Cartogopher, etc.) to your local `opencode.jsonc` -- it won't be committed.
 
 #### How the Agent Uses OpenCode
 

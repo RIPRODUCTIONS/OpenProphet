@@ -508,6 +508,42 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {},
         },
       },
+      // ── Economic Intelligence Feeds (free, no API key) ──────────────────
+      {
+        name: 'get_treasury_data',
+        description: 'Get US Treasury data: national debt levels and average interest rates on government securities. No API key required. Updated daily.',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'get_global_events',
+        description: 'Get global news events from GDELT (Global Database of Events, Language, and Tone). Searches 100+ languages, updates every 15 minutes. No API key required.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search query (e.g., "tariff china", "federal reserve"). Leave empty for broad market coverage.' },
+          },
+        },
+      },
+      {
+        name: 'get_economic_indicators',
+        description: 'Get key economic indicators from BLS: CPI, Core CPI, Unemployment Rate, Nonfarm Payrolls, PPI. No API key required.',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'get_market_snapshot',
+        description: 'Get broad market snapshot from Yahoo Finance: indexes (SPY, QQQ, DIA, IWM), bonds, commodities (Gold, Oil), crypto (BTC, ETH), VIX. Includes 5-day history. No API key required.',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'get_defense_contracts',
+        description: 'Get recent US defense/military contracts from USAspending.gov. Useful for defense sector signals. No API key required.',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'get_global_trade_flows',
+        description: 'Get global trade flow data from UN Comtrade for strategic commodities: crude, gas, gold, semiconductors. No API key required. Data lags 1-2 months.',
+        inputSchema: { type: 'object', properties: {} },
+      },
       {
         name: 'get_quick_market_intelligence',
         description: 'Get AI-powered quick market intelligence (Gemini-cleaned news from MarketWatch - 15 articles max, very fast)',
@@ -861,20 +897,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'update_strategy_rules',
-        description: 'Update the active trading strategy rules. Use this when the user asks you to change trading rules, risk limits, or strategy parameters.',
+        description: 'Create a new trading strategy with the given rules and assign it to the current agent. Existing strategies are NEVER modified — a new one is always created so the operator can review it on the Agents page. ONLY use this when the user EXPLICITLY asks you to change trading rules.',
         inputSchema: {
           type: 'object',
           properties: {
-            rules: {
-              type: 'string',
-              description: 'The new trading rules in markdown format',
-            },
-            strategy_id: {
-              type: 'string',
-              description: 'Optional: strategy ID to update. Defaults to "default".',
-            },
+            name: { type: 'string', description: 'Name for the new strategy (e.g., "Conservative Options v2")' },
+            rules: { type: 'string', description: 'The trading rules in markdown format' },
           },
-          required: ['rules'],
+          required: ['name', 'rules'],
         },
       },
       {
@@ -1550,6 +1580,34 @@ ${allNews.map((article, i) =>
         };
       }
 
+      // ── Economic Intelligence Feeds ──────────────────────────────────────
+      case 'get_treasury_data': {
+        const data = await callTradingBot('/feeds/treasury');
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      case 'get_global_events': {
+        let endpoint = '/feeds/gdelt';
+        if (args.query) endpoint += `?q=${encodeURIComponent(args.query)}`;
+        const data = await callTradingBot(endpoint);
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      case 'get_economic_indicators': {
+        const data = await callTradingBot('/feeds/bls');
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      case 'get_market_snapshot': {
+        const data = await callTradingBot('/feeds/yfinance');
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      case 'get_defense_contracts': {
+        const data = await callTradingBot('/feeds/usaspending');
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+      case 'get_global_trade_flows': {
+        const data = await callTradingBot('/feeds/comtrade');
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+
       case 'get_quick_market_intelligence': {
         const data = await callTradingBot('/intelligence/quick-market');
         return {
@@ -1958,22 +2016,35 @@ Worst Trade: ${stats.worst_result_pct.toFixed(1)}% ($${stats.worst_result_dollar
       // ── Agent Self-Modification Tools ──────────────────────────
       case 'update_agent_prompt': {
         const { prompt } = args;
-        await agentAxios.put(`${AGENT_URL}/api/sandboxes/${OPENPROPHET_SANDBOX_ID}/agent/overrides`, {
+        const configResp2 = await agentAxios.get(`${AGENT_URL}/api/sandboxes/${OPENPROPHET_SANDBOX_ID}/config`);
+        const agentId = configResp2.data?.agent?.id || 'default';
+        await agentAxios.put(`${AGENT_URL}/api/agents/${agentId}`, {
           systemPromptTemplate: 'custom',
           customSystemPrompt: prompt,
         });
+        await agentAxios.put(`${AGENT_URL}/api/sandboxes/${OPENPROPHET_SANDBOX_ID}/agent/overrides`, {
+          systemPromptTemplate: null,
+          customSystemPrompt: null,
+        });
         return {
-          content: [{ type: 'text', text: `Updated sandbox-local agent prompt (${prompt.length} chars). Changes take effect on next heartbeat.` }],
+          content: [{ type: 'text', text: `Updated agent "${agentId}" prompt (${prompt.length} chars). Visible on Agents page. Takes effect next heartbeat.` }],
         };
       }
 
       case 'update_strategy_rules': {
-        const { rules } = args;
-        await agentAxios.put(`${AGENT_URL}/api/sandboxes/${OPENPROPHET_SANDBOX_ID}/strategy-rules`, {
-          rules,
+        const { name: strategyName, rules } = args;
+        const createResp = await agentAxios.post(`${AGENT_URL}/api/strategies`, {
+          name: strategyName || 'Agent-Created Strategy',
+          description: `Created by agent at ${new Date().toISOString()}`,
+          customRules: rules,
         });
+        const newStrategy = createResp.data.strategy;
+        const configResp3 = await agentAxios.get(`${AGENT_URL}/api/sandboxes/${OPENPROPHET_SANDBOX_ID}/config`);
+        const agentId3 = configResp3.data?.agent?.id || 'default';
+        await agentAxios.put(`${AGENT_URL}/api/agents/${agentId3}`, { strategyId: newStrategy.id });
+        await agentAxios.put(`${AGENT_URL}/api/sandboxes/${OPENPROPHET_SANDBOX_ID}/strategy-rules`, { rules: '' });
         return {
-          content: [{ type: 'text', text: `Updated sandbox-local strategy rules (${rules.length} chars). Changes take effect on next heartbeat.` }],
+          content: [{ type: 'text', text: `Created new strategy "${strategyName}" (ID: ${newStrategy.id}) and assigned to agent "${agentId3}". Visible on Agents page. Existing strategies not modified.` }],
         };
       }
 

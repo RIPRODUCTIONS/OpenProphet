@@ -80,6 +80,10 @@ func main() {
 	newsService := services.NewNewsService()
 	newsController := controllers.NewNewsController(newsService)
 
+	// Create economic feeds service and controller
+	economicFeedsService := services.NewEconomicFeedsService()
+	economicFeedsController := controllers.NewEconomicFeedsController(economicFeedsService)
+
 	// Create Gemini service and intelligence controller
 	geminiService := services.NewGeminiService(cfg.GeminiAPIKey)
 	analysisService := services.NewTechnicalAnalysisService(dataService)
@@ -125,7 +129,7 @@ func main() {
 	}
 
 	// Setup HTTP server
-	router := setupRouter(orderController, newsController, intelligenceController, positionController, activityController)
+	router := setupRouter(orderController, newsController, intelligenceController, positionController, activityController, economicFeedsController)
 
 	// Start data cleanup routine
 	go startDataCleanup(ctx, storageService, cfg.DataRetentionDays, logger)
@@ -155,7 +159,7 @@ func main() {
 	}
 }
 
-func setupRouter(orderController *controllers.OrderController, newsController *controllers.NewsController, intelligenceController *controllers.IntelligenceController, positionController *controllers.PositionManagementController, activityController *controllers.ActivityController) *gin.Engine {
+func setupRouter(orderController *controllers.OrderController, newsController *controllers.NewsController, intelligenceController *controllers.IntelligenceController, positionController *controllers.PositionManagementController, activityController *controllers.ActivityController, economicFeedsController *controllers.EconomicFeedsController) *gin.Engine {
 	router := gin.Default()
 
 	// Enable CORS
@@ -225,6 +229,14 @@ func setupRouter(orderController *controllers.OrderController, newsController *c
 		api.DELETE("/positions/managed/:id", positionController.HandleCloseManagedPosition)
 
 		// Activity logging endpoints
+		// Economic intelligence feeds (free, no API key required)
+		api.GET("/feeds/treasury", economicFeedsController.HandleGetTreasury)
+		api.GET("/feeds/gdelt", economicFeedsController.HandleGetGDELT)
+		api.GET("/feeds/bls", economicFeedsController.HandleGetBLS)
+		api.GET("/feeds/yfinance", economicFeedsController.HandleGetYFinance)
+		api.GET("/feeds/usaspending", economicFeedsController.HandleGetUSASpending)
+		api.GET("/feeds/comtrade", economicFeedsController.HandleGetComtrade)
+
 		api.GET("/activity/current", activityController.HandleGetCurrentActivity)
 		api.GET("/activity/:date", activityController.HandleGetActivityByDate)
 		api.GET("/activity", activityController.HandleListActivityLogs)
