@@ -40,3 +40,4 @@ node_modules/
 
 # News summary cache
 news_summaries/*.json
+quickstart.sh
