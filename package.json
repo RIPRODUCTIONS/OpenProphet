@@ -16,7 +16,7 @@
     "bot:status": "bash scripts/status.sh",
     "bot:monitor": "bash scripts/monitor.sh",
     "bot:live": "bash scripts/start.sh --live",
-    "backtest": "bash scripts/backtest.sh"
+    "backtest": "node backtest/cli.js"
   },
   "repository": {
     "type": "git",
