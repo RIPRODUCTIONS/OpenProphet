@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"prophet-trader/interfaces"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alpacahq/alpaca-trade-api-go/v3/alpaca"
@@ -343,6 +345,7 @@ func (s *AlpacaTradingService) GetOptionsChain(ctx context.Context, underlying s
 		// Parse the OCC symbol to extract strike, expiration, and type
 		// OCC format: TSLA251219C00400000
 		// This is a simplified parser - you may want to use a proper OCC parser library
+		strikePrice, optionType := parseOCCSymbol(symbol)
 		contract := &interfaces.OptionContract{
 			Symbol:           symbol,
 			UnderlyingSymbol: underlying,
@@ -355,7 +358,8 @@ func (s *AlpacaTradingService) GetOptionsChain(ctx context.Context, underlying s
 			Theta:            data.Greeks.Theta,
 			Vega:             data.Greeks.Vega,
 			ExpirationDate:   expiration,
-			// TODO: Parse strike price and option type from OCC symbol
+			StrikePrice:      strikePrice,
+			ContractType:     optionType,
 		}
 		contracts = append(contracts, contract)
 	}
@@ -424,4 +428,34 @@ func (s *AlpacaTradingService) ListOptionsPositions(ctx context.Context) ([]*int
 	}
 
 	return optionsPositions, nil
+}
+
+// parseOCCSymbol extracts strike price and option type from an OCC symbol.
+// OCC format: TSLA251219C00400000 → underlying=TSLA, exp=251219, type=C(call), strike=400.00
+func parseOCCSymbol(symbol string) (strikePrice float64, optionType string) {
+	s := strings.TrimSpace(symbol)
+	if len(s) < 16 {
+		return 0, ""
+	}
+
+	// Option type is at position len-15: C=call, P=put
+	typeChar := string(s[len(s)-15])
+	switch typeChar {
+	case "C":
+		optionType = "call"
+	case "P":
+		optionType = "put"
+	default:
+		return 0, ""
+	}
+
+	// Strike is last 8 digits, in units of 1/1000 dollar
+	strikeStr := s[len(s)-8:]
+	strikeInt, err := strconv.ParseInt(strikeStr, 10, 64)
+	if err != nil {
+		return 0, optionType
+	}
+	strikePrice = float64(strikeInt) / 1000.0
+
+	return strikePrice, optionType
 }

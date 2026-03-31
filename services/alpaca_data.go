@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"prophet-trader/interfaces"
 	"time"
 
@@ -19,8 +20,11 @@ type AlpacaDataService struct {
 // NewAlpacaDataService creates a new Alpaca data service
 func NewAlpacaDataService(apiKey, secretKey string) *AlpacaDataService {
 	client := marketdata.NewClient(marketdata.ClientOpts{
-		APIKey:    apiKey,
-		APISecret: secretKey,
+		APIKey:     apiKey,
+		APISecret:  secretKey,
+		RetryDelay: 500 * time.Millisecond,
+		RetryLimit: 3,
+		HTTPClient: &http.Client{Timeout: 30 * time.Second},
 	})
 
 	logger := logrus.New()
