@@ -368,13 +368,82 @@ func (s *AlpacaTradingService) GetOptionsChain(ctx context.Context, underlying s
 	return contracts, nil
 }
 
+// alpacaOptionsQuoteResponse represents the response from Alpaca's latest options quotes API
+type alpacaOptionsQuoteResponse struct {
+	Quotes map[string]struct {
+		AskPrice    float64   `json:"ap"`
+		AskSize     int64     `json:"as"`
+		AskExchange string    `json:"ax"`
+		BidPrice    float64   `json:"bp"`
+		BidSize     int64     `json:"bs"`
+		BidExchange string    `json:"bx"`
+		Condition   string    `json:"c"`
+		Timestamp   time.Time `json:"t"`
+	} `json:"quotes"`
+}
+
 // GetOptionsQuote retrieves a quote for a specific options contract
 func (s *AlpacaTradingService) GetOptionsQuote(ctx context.Context, symbol string) (*interfaces.OptionsQuote, error) {
-	// Note: This would use Alpaca's options quotes API
-	// For now, return nil as placeholder
 	s.logger.WithField("symbol", symbol).Info("Getting options quote")
 
-	return nil, fmt.Errorf("options quote not implemented yet")
+	if symbol == "" {
+		return nil, fmt.Errorf("symbol is required")
+	}
+
+	url := fmt.Sprintf("https://data.alpaca.markets/v1beta1/options/quotes/latest?symbols=%s", symbol)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("APCA-API-KEY-ID", s.apiKey)
+	req.Header.Set("APCA-API-SECRET-KEY", s.apiSecret)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch options quote: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("options quote API error (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var quoteResp alpacaOptionsQuoteResponse
+	if err := json.Unmarshal(body, &quoteResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	quoteData, ok := quoteResp.Quotes[symbol]
+	if !ok {
+		return nil, fmt.Errorf("no quote found for symbol: %s", symbol)
+	}
+
+	quote := &interfaces.OptionsQuote{
+		Symbol:    symbol,
+		BidPrice:  quoteData.BidPrice,
+		BidSize:   quoteData.BidSize,
+		AskPrice:  quoteData.AskPrice,
+		AskSize:   quoteData.AskSize,
+		Timestamp: quoteData.Timestamp,
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"symbol": symbol,
+		"bid":    quote.BidPrice,
+		"ask":    quote.AskPrice,
+	}).Info("Retrieved options quote")
+
+	return quote, nil
 }
 
 // GetOptionsPosition retrieves a specific options position

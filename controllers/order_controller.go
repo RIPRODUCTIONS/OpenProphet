@@ -463,6 +463,27 @@ func (oc *OrderController) ListOptionsPositions(c *gin.Context) {
 	c.JSON(200, positions)
 }
 
+// GetOptionsQuote handles GET /api/options/quote/:symbol
+func (oc *OrderController) GetOptionsQuote(c *gin.Context) {
+	symbol := c.Param("symbol")
+	if symbol == "" {
+		c.JSON(400, gin.H{"error": "symbol required"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	quote, err := oc.tradingService.GetOptionsQuote(ctx, symbol)
+	if err != nil {
+		oc.logger.WithError(err).Error("Failed to get options quote")
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, quote)
+}
+
 // GetOptionsChain handles GET /api/options/chain/:symbol?expiration=2025-11-22&delta_min=0.4&delta_max=0.6&min_bid=0.1
 func (oc *OrderController) GetOptionsChain(c *gin.Context) {
 	symbol := c.Param("symbol")
