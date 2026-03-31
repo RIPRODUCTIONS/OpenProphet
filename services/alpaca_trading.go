@@ -438,8 +438,8 @@ func parseOCCSymbol(symbol string) (strikePrice float64, optionType string) {
 		return 0, ""
 	}
 
-	// Option type is at position len-15: C=call, P=put
-	typeChar := string(s[len(s)-15])
+	// Option type is 9 chars from the end (before 8-digit strike): C=call, P=put
+	typeChar := string(s[len(s)-9])
 	switch typeChar {
 	case "C":
 		optionType = "call"
