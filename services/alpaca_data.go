@@ -8,13 +8,16 @@ import (
 	"time"
 
 	"github.com/alpacahq/alpaca-trade-api-go/v3/marketdata"
+	"github.com/alpacahq/alpaca-trade-api-go/v3/marketdata/stream"
 	"github.com/sirupsen/logrus"
 )
 
 // AlpacaDataService implements DataService using Alpaca Market Data API
 type AlpacaDataService struct {
-	client *marketdata.Client
-	logger *logrus.Logger
+	client    *marketdata.Client
+	logger    *logrus.Logger
+	apiKey    string
+	secretKey string
 }
 
 // NewAlpacaDataService creates a new Alpaca data service
@@ -33,8 +36,10 @@ func NewAlpacaDataService(apiKey, secretKey string) *AlpacaDataService {
 	})
 
 	return &AlpacaDataService{
-		client: client,
-		logger: logger,
+		client:    client,
+		logger:    logger,
+		apiKey:    apiKey,
+		secretKey: secretKey,
 	}
 }
 
@@ -154,21 +159,65 @@ func (s *AlpacaDataService) GetLatestTrade(ctx context.Context, symbol string) (
 	return nil, fmt.Errorf("no trade data found for symbol: %s", symbol)
 }
 
-// StreamBars starts streaming bar data for specified symbols
+// StreamBars starts streaming real-time bar data for the specified symbols via
+// Alpaca's WebSocket API. The returned channel receives bars until ctx is
+// cancelled or the stream terminates. The channel is closed on shutdown.
 func (s *AlpacaDataService) StreamBars(ctx context.Context, symbols []string) (<-chan *interfaces.Bar, error) {
-	// This would require websocket connection setup
-	// For now, returning a simple implementation
-	// You can expand this to use Alpaca's streaming API
+	if len(symbols) == 0 {
+		return nil, fmt.Errorf("no symbols provided for streaming")
+	}
 
-	barChan := make(chan *interfaces.Bar)
+	const barChanBuffer = 100
+	barChan := make(chan *interfaces.Bar, barChanBuffer)
 
-	s.logger.WithField("symbols", symbols).Info("Streaming bars not fully implemented yet")
+	s.logger.WithField("symbols", symbols).Info("Starting bar stream")
 
-	// TODO: Implement actual streaming using Alpaca websocket
-	// For now, return empty channel
+	stocksClient := stream.NewStocksClient(
+		marketdata.IEX,
+		stream.WithCredentials(s.apiKey, s.secretKey),
+		stream.WithBars(func(bar stream.Bar) {
+			b := &interfaces.Bar{
+				Symbol:    bar.Symbol,
+				Timestamp: bar.Timestamp,
+				Open:      bar.Open,
+				High:      bar.High,
+				Low:       bar.Low,
+				Close:     bar.Close,
+				Volume:    int64(bar.Volume),
+				VWAP:      bar.VWAP,
+			}
+			select {
+			case barChan <- b:
+			case <-ctx.Done():
+			}
+		}, symbols...),
+		// reconnectLimit=0 means unlimited retries; 1s base delay gives linear
+		// backoff (1s, 2s, 3s, …) which is handled inside the SDK.
+		stream.WithReconnectSettings(0, 1*time.Second),
+		stream.WithConnectCallback(func() {
+			s.logger.WithField("symbols", symbols).Info("Bar stream connected")
+		}),
+		stream.WithDisconnectCallback(func() {
+			s.logger.WithField("symbols", symbols).Warn("Bar stream disconnected, reconnecting...")
+		}),
+	)
+
+	if err := stocksClient.Connect(ctx); err != nil {
+		close(barChan)
+		return nil, fmt.Errorf("failed to connect to bar stream: %w", err)
+	}
+
+	s.logger.WithField("symbols", symbols).Info("Bar stream connected successfully")
+
+	// Monitor the stream lifetime: Terminated() fires when the stream ends
+	// (context cancellation sends nil, unrecoverable errors send the error).
 	go func() {
 		defer close(barChan)
-		<-ctx.Done()
+		if err := <-stocksClient.Terminated(); err != nil {
+			s.logger.WithError(err).Error("Bar stream terminated with error")
+		} else {
+			s.logger.Info("Bar stream terminated")
+		}
 	}()
 
 	return barChan, nil

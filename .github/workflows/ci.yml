@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  go-build-test:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect Go version
+        id: goversion
+        run: echo "version=$(grep '^go ' go.mod | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.goversion.outputs.version }}
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./services/... -v
+
+  node-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect Go version
+        id: goversion
+        run: echo "version=$(grep '^go ' go.mod | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.goversion.outputs.version }}
+
+      - name: Go vet
+        run: go vet ./...
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - name: ESLint (basic rules)
+        run: >
+          npx --yes eslint
+          --no-eslintrc
+          --rule '{"no-undef":"error","no-unused-vars":"warn"}'
+          *.js agent/*.js
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build .
