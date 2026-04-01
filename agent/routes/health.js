@@ -29,6 +29,7 @@ export default function createHealthRoutes(ctx) {
       uptime: process.uptime(),
       state: ctx.harness.state.toJSON(),
       sandboxes: sandboxStates,
+      wallet: ctx.walletSystem ? ctx.walletSystem.getStatus() : null,
     });
   });
 

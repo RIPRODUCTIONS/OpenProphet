@@ -24,6 +24,8 @@ import { getVolAnalysisToolDefinition, handleVolAnalysisToolCall } from './vol-a
 import { createExecutionTracker, getExecutionToolDefinitions, handleExecutionToolCall } from './execution-tracker.js';
 import { getPerformanceToolDefinition, handlePerformanceToolCall } from './perf-analytics.js';
 import { getRegimeToolDefinition, handleRegimeToolCall } from './regime-detector.js';
+import { getWalletToolDefinitions, handleWalletToolCall, isWalletTool } from './wallet-tools.js';
+import { createWalletSystem } from './wallet/index.js';
 
 // Validate environment before anything else
 validateEnv({ fatal: false }); // warn but don't kill — allows dev mode without all keys
@@ -78,6 +80,18 @@ try {
 
 // Initialize Alert Service
 const alerts = createAlertService();
+
+// Initialize Wallet System (optional — requires Coinbase API keys)
+let walletSystem = null;
+if (process.env.COINBASE_API_KEY && process.env.COINBASE_API_SECRET) {
+  try {
+    walletSystem = createWalletSystem();
+    await walletSystem.init();
+    console.error('WalletSystem initialized:', walletSystem.walletManager.getStatus().address);
+  } catch (e) {
+    console.error('WalletSystem not available:', e.message);
+  }
+}
 
 // Initialize Execution Tracker
 const executionTracker = createExecutionTracker();
@@ -1171,6 +1185,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       // ── Crypto Trading Tools (auto-registered from crypto-tools.js) ──
       ...(cryptoService ? getCryptoToolDefinitions() : []),
+      // ── Wallet & DeFi Tools (auto-registered from wallet-tools.js) ──
+      ...(walletSystem ? getWalletToolDefinitions() : []),
       // ── Risk Guard Status Tool ──
       {
         name: 'get_risk_guard_status',
@@ -1373,6 +1389,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         } catch (e) { console.error('RiskGuard recordTrade error:', e.message); }
       }
       return result;
+    }
+
+    // ── Wallet & DeFi tool dispatch ──
+    if (walletSystem && isWalletTool(name)) {
+      return await handleWalletToolCall(name, args, walletSystem);
     }
 
     // ── Risk Guard status tool ──

@@ -39,6 +39,7 @@
   "homepage": "https://github.com/JakeNesler/OpenProphet#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@coinbase/agentkit": "0.10.4",
     "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.22.0",
     "@xenova/transformers": "^2.17.2",
@@ -47,6 +48,7 @@
     "ccxt": "^4.5.45",
     "cors": "^2.8.5",
     "dotenv": "^17.3.1",
+    "ethers": "6.16.0",
     "express": "^5.1.0",
     "openai": "^6.9.1",
     "sqlite-vec": "^0.1.7-alpha.2"

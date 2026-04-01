@@ -327,6 +327,51 @@ async function checkGoBackend() {
   }
 }
 
+async function checkWallet() {
+  const apiKey = process.env.COINBASE_API_KEY;
+  const apiSecret = process.env.COINBASE_API_SECRET;
+  const encryptionKey = process.env.WALLET_ENCRYPTION_KEY;
+
+  if (!apiKey || !apiSecret) {
+    return {
+      name: 'Agent Wallet',
+      status: 'skip',
+      message: 'COINBASE_API_KEY not configured',
+      critical: false,
+    };
+  }
+
+  if (!encryptionKey) {
+    return {
+      name: 'Agent Wallet',
+      status: 'warn',
+      message: 'WALLET_ENCRYPTION_KEY not set — wallet seed will not be encrypted',
+      critical: false,
+    };
+  }
+
+  // Check if wallet.json exists
+  const walletPath = join(PROJECT_ROOT, 'data', 'wallet.json');
+  try {
+    await access(walletPath, constants.R_OK);
+    const raw = await readFile(walletPath, 'utf-8');
+    const data = JSON.parse(raw);
+    return {
+      name: 'Agent Wallet',
+      status: 'pass',
+      message: `${data.address?.slice(0, 10)}... on ${data.networkId || 'base-mainnet'}`,
+      critical: false,
+    };
+  } catch {
+    return {
+      name: 'Agent Wallet',
+      status: 'warn',
+      message: 'Wallet not yet initialized (will create on first start)',
+      critical: false,
+    };
+  }
+}
+
 // ─── Orchestrator ────────────────────────────────────────────────────────────
 
 /**
@@ -352,12 +397,13 @@ export async function runHealthCheck(options = {}) {
   const pdtCheck = checkPDTFlag(paperCheck, liveCheck);
 
   // Run independent checks in parallel
-  const [dbCheck, strategyCheck, backendCheck] = await Promise.all([
+  const [dbCheck, strategyCheck, backendCheck, walletCheck] = await Promise.all([
     checkDatabase(),
     checkStrategies(),
     options.skipBackend ? Promise.resolve({
       name: 'Go Backend', status: 'skip', message: 'Skipped by option', critical: false,
     }) : checkGoBackend(),
+    checkWallet(),
   ]);
 
   // Strip internal account data from check results
@@ -370,6 +416,7 @@ export async function runHealthCheck(options = {}) {
     dbCheck,
     strategyCheck,
     backendCheck,
+    walletCheck,
   ];
 
   // System passes if all critical checks pass (or skip)

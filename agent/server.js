@@ -17,7 +17,9 @@ import createPermissionsRoutes from './routes/permissions.js';
 import createStrategyRoutes from './routes/strategy.js';
 import createHealthRoutes from './routes/health.js';
 import createPortfolioRoutes from './routes/portfolio.js';
+import createWalletRoutes from './routes/wallet.js';
 import { getActiveAccount, getSandboxes } from './config-store.js';
+import { createWalletSystem } from '../wallet/index.js';
 
 // ── CLI Flags ──────────────────────────────────────────────────────
 const { values: cliFlags } = parseArgs({
@@ -50,6 +52,19 @@ app.use('/api', createPermissionsRoutes(ctx));
 app.use('/api', createStrategyRoutes(ctx));
 app.use('/api', createHealthRoutes(ctx));
 app.use('/api', createPortfolioRoutes(ctx));
+
+// ── Wallet subsystem (optional — requires COINBASE_API_KEY) ──────────────
+let walletSystem = null;
+if (process.env.COINBASE_API_KEY && process.env.COINBASE_API_SECRET) {
+  try {
+    walletSystem = createWalletSystem();
+    await walletSystem.init();
+    console.log(`  Wallet initialized: ${walletSystem.walletManager.getStatus().address}`);
+  } catch (err) {
+    console.log(`  Wallet not available: ${err.message}`);
+  }
+}
+app.use('/api', createWalletRoutes(ctx, walletSystem));
 
 // Serve static files (after API routes)
 app.use(express.static(path.join(ctx.__dirname, 'public')));
