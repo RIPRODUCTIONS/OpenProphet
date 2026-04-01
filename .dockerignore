@@ -1,0 +1,44 @@
+# Dependencies (rebuilt inside container)
+node_modules/
+
+# Version control
+.git/
+.gitattributes
+.github/
+
+# Secrets (mounted at runtime via env_file)
+.env
+.env.example
+
+# Persistent data (mounted as volume)
+data/
+
+# Runtime logs (created inside container)
+logs/
+*.log
+activity_logs/
+decisive_actions/
+
+# macOS
+.DS_Store
+
+# Scripts not needed in image
+scripts/
+tests/
+
+# Pre-built binary (rebuilt in Go builder stage)
+prophet_bot
+
+# Editor / IDE / tooling
+.claude/
+.mcp.json.example
+opencode.jsonc
+opencode.example.jsonc
+
+# PM2 config (supervisord replaces this in Docker)
+ecosystem.config.cjs
+
+# Documentation
+README.md
+TRADING_RULES.md
+LICENSE

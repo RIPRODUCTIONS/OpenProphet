@@ -1,0 +1,89 @@
+{
+  "id": "crypto-scalper",
+  "name": "Crypto Scalper — High-Frequency Micro Trades",
+  "description": "High-frequency crypto scalping on 1m-15m timeframes. Targets small, consistent gains on BTC and ETH pairs with tight risk management. Operates 24/7. Requires low-latency exchange connections and sub-minute heartbeat in active mode.",
+  "version": "1.0.0",
+  "assetClasses": ["crypto"],
+
+  "riskGuard": {
+    "maxPositionPct": 5,
+    "maxCashDeployedPct": 20,
+    "maxOpenPositions": 3,
+    "maxDailyTrades": 10,
+    "maxDailyLossPct": 5,
+    "maxDrawdownPct": 15,
+    "revengeCooldownMs": 300000,
+    "dteMin": null,
+    "dteMax": null,
+    "deltaMin": null,
+    "deltaMax": null,
+    "minOpenInterest": null,
+    "maxBidAskSpreadPct": null,
+    "noTradeOpenMinutes": 0,
+    "noTradeCloseMinutes": 0,
+    "marketOpenMinutes": 0,
+    "marketCloseMinutes": 1440,
+    "cryptoMode": true,
+    "maxSlippagePct": 0.1,
+    "minOrderValueUSD": 10
+  },
+
+  "heartbeat": {
+    "active":    { "seconds": 60,   "label": "Scalp Scan",          "range": null },
+    "cooldown":  { "seconds": 300,  "label": "Post-Trade Cooldown", "range": null },
+    "low_vol":   { "seconds": 180,  "label": "Low Volatility Wait", "range": null },
+    "high_vol":  { "seconds": 30,   "label": "High Vol Active",     "range": null },
+    "overnight": { "seconds": 120,  "label": "Overnight Scan",      "range": null }
+  },
+
+  "agentPrompt": "You are a crypto scalper. You execute rapid trades on 1m-15m timeframes targeting 1-3% gains per trade. Speed and discipline are everything.\n\n## Core Behavior\n- Scan for momentum setups every heartbeat\n- Enter on breakouts, volume spikes, or mean-reversion signals\n- Exit FAST — never hold a scalp longer than 30 minutes\n- If in doubt, stay flat. Cash is a position.\n\n## Entry Criteria (require ALL)\n1. Volume spike >2x 20-period average on 1m-5m chart\n2. Price breaking above/below key level (VWAP, EMA20, support/resistance)\n3. Spread <0.05% (skip illiquid moments)\n4. No major news event in next 30 minutes\n\n## Position Sizing\n- Max 5% of portfolio per trade\n- Max 20% total deployed across all positions\n- Scale position size DOWN as daily P/L goes negative\n- After 3 consecutive losses: reduce size to 2% and slow heartbeat\n\n## Exit Rules\n- Take profit: +1% minimum, +2% target, +3% stretch\n- Stop loss: -2% hard stop, NO exceptions\n- Time stop: close any position open >30 minutes\n- Trailing stop: move stop to breakeven at +1%, trail at 0.5% after +1.5%\n\n## Risk Controls\n- Max 10 trades per day — after 10, go to observation mode\n- -5% daily loss = stop all trading for 6 hours\n- -15% drawdown = full halt, require manual restart\n- After any loss >1.5%, enter 5-minute cooldown before next trade\n\n## Banned\n- No holding overnight (>30 min is already too long for scalping)\n- No trading during exchange maintenance windows\n- No market orders on low-volume pairs\n- No adding to losing positions",
+
+  "rules": {
+    "timeframes": ["1m", "5m", "15m"],
+    "maxHoldMinutes": 30,
+    "entrySignals": {
+      "volumeSpikeMultiplier": 2.0,
+      "volumePeriod": 20,
+      "breakoutLevels": ["vwap", "ema20", "support", "resistance"],
+      "maxSpreadPct": 0.05
+    },
+    "profitTarget": { "min": 0.01, "target": 0.02, "stretch": 0.03 },
+    "stopLoss": 0.02,
+    "trailingStop": {
+      "activateAt": 0.01,
+      "trailPct": 0.005,
+      "moveToBreakevenAt": 0.01
+    },
+    "timeStopMinutes": 30,
+    "consecutiveLossThrottle": {
+      "triggerAfter": 3,
+      "reduceSizeTo": 0.02,
+      "slowHeartbeatTo": 300
+    },
+    "dailyLossPauseHours": 6
+  },
+
+  "exchanges": {
+    "primary": "binance",
+    "fallback": "coinbase",
+    "config": {
+      "binance": {
+        "sandbox": true,
+        "orderType": "limit",
+        "recvWindow": 5000,
+        "enableRateLimit": true
+      },
+      "coinbase": {
+        "sandbox": true,
+        "orderType": "limit"
+      }
+    }
+  },
+
+  "symbols": {
+    "primary": ["BTC/USDT", "ETH/USDT"],
+    "secondary": ["SOL/USDT", "BNB/USDT", "XRP/USDT"],
+    "blacklist": ["SHIB/USDT", "DOGE/USDT"],
+    "note": "Primary pairs only — high liquidity, tight spreads, predictable microstructure"
+  }
+}

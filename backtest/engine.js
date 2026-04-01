@@ -440,3 +440,230 @@ export function loadStrategy(strategyId) {
     );
   }
 }
+
+// ─── Direct Alpaca API ───────────────────────────────────────────────────────
+
+/**
+ * Fetch bars directly from Alpaca's data API, bypassing the Go backend.
+ *
+ * Requires ALPACA_PUBLIC_KEY (or ALPACA_API_KEY) and ALPACA_SECRET_KEY in env.
+ * Handles Alpaca's pagination via next_page_token.
+ */
+export async function fetchBarsFromAlpaca(symbol, start, end, timeframe = '1Day') {
+  const apiKey = process.env.ALPACA_PUBLIC_KEY ?? process.env.ALPACA_API_KEY;
+  const secretKey = process.env.ALPACA_SECRET_KEY;
+
+  if (!apiKey || !secretKey) {
+    throw new Error(
+      'Alpaca API credentials not found. Set ALPACA_PUBLIC_KEY (or ALPACA_API_KEY) and ALPACA_SECRET_KEY in environment or .env',
+    );
+  }
+
+  const headers = {
+    'APCA-API-KEY-ID': apiKey,
+    'APCA-API-SECRET-KEY': secretKey,
+    'Accept': 'application/json',
+  };
+
+  const allBars = [];
+  let pageToken = null;
+
+  do {
+    const params = new URLSearchParams({
+      start,
+      end,
+      timeframe,
+      limit: '10000',
+      adjustment: 'split',
+    });
+    if (pageToken) params.set('page_token', pageToken);
+
+    const url = `https://data.alpaca.markets/v2/stocks/${encodeURIComponent(symbol)}/bars?${params}`;
+    const resp = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`Alpaca API returned ${resp.status}: ${body}`);
+    }
+
+    const data = await resp.json();
+    const bars = data.bars ?? [];
+    allBars.push(...bars);
+    pageToken = data.next_page_token ?? null;
+  } while (pageToken);
+
+  return normaliseBars(allBars);
+}
+
+// ─── Report Formatting ──────────────────────────────────────────────────────
+
+/**
+ * Format a single result or array of results into a human-readable report.
+ *
+ * @param {object|object[]} results - Single result or array from runBacktest()
+ * @param {object} [opts]
+ * @param {boolean} [opts.verbose] - Include full trade log
+ * @returns {string} Formatted text report
+ */
+export function formatReport(results, opts = {}) {
+  const multi = Array.isArray(results);
+  const list = multi ? results : [results];
+  const lines = [];
+
+  // ── Header ──
+  const first = list[0];
+  lines.push('═'.repeat(72));
+  lines.push('  OpenProphet Backtest Report');
+  lines.push('═'.repeat(72));
+  lines.push(`  Strategy:    ${first.strategy}`);
+  if (first.startDate && first.endDate) {
+    lines.push(`  Date Range:  ${fmtDate(first.startDate)} → ${fmtDate(first.endDate)}`);
+  }
+  lines.push(`  Capital:     $${fmtNum(first.initialCapital)}`);
+  lines.push(`  Tickers:     ${list.map((r) => r.symbol).join(', ')}`);
+  lines.push('─'.repeat(72));
+
+  // ── Per-ticker table (only for multi-ticker) ──
+  if (multi && list.length > 1) {
+    lines.push('');
+    lines.push('  Per-Ticker Results:');
+    lines.push('');
+
+    const colW = { sym: 8, ret: 10, pnl: 12, sharpe: 8, winR: 8, trades: 7, dd: 8 };
+    for (const r of list) {
+      colW.sym = Math.max(colW.sym, r.symbol.length + 2);
+    }
+
+    const hdr = [
+      pad('Symbol', colW.sym),
+      pad('Return%', colW.ret),
+      pad('P&L', colW.pnl),
+      pad('Sharpe', colW.sharpe),
+      pad('Win%', colW.winR),
+      pad('Trades', colW.trades),
+      pad('MaxDD%', colW.dd),
+    ].join('');
+    lines.push(`  ${hdr}`);
+    lines.push(`  ${'─'.repeat(hdr.length)}`);
+
+    for (const r of list) {
+      lines.push(
+        `  ${[
+          pad(r.symbol, colW.sym),
+          pad(fmtPct(r.totalReturn), colW.ret),
+          pad(fmtDollar(r.totalPnL), colW.pnl),
+          pad(r.sharpeRatio.toFixed(2), colW.sharpe),
+          pad(fmtPct(r.winRate), colW.winR),
+          pad(String(r.totalTrades), colW.trades),
+          pad(fmtPct(r.maxDrawdown), colW.dd),
+        ].join('')}`,
+      );
+    }
+    lines.push('');
+    lines.push('─'.repeat(72));
+  }
+
+  // ── Aggregated Metrics ──
+  const agg = aggregateResults(list);
+  lines.push('');
+  lines.push('  Aggregated Metrics:');
+  lines.push('');
+  lines.push(`    Combined P&L:       ${fmtDollar(agg.combinedPnL)}`);
+  lines.push(`    Combined Return:    ${fmtPct(agg.combinedReturn)}`);
+  lines.push(`    Avg Sharpe Ratio:   ${agg.avgSharpe.toFixed(2)}`);
+  lines.push(`    Avg Win Rate:       ${fmtPct(agg.avgWinRate)}`);
+  lines.push(`    Avg Max Drawdown:   ${fmtPct(agg.avgMaxDrawdown)}`);
+  lines.push(`    Total Trades:       ${agg.totalTrades}`);
+  lines.push(`    Combined Capital:   ${fmtDollar(agg.combinedFinalCapital)}`);
+  lines.push('');
+  lines.push('─'.repeat(72));
+
+  // ── Trade Log (verbose) ──
+  if (opts.verbose) {
+    lines.push('');
+    lines.push('  Trade Log:');
+    lines.push('');
+
+    for (const r of list) {
+      if (multi && list.length > 1) {
+        lines.push(`  ── ${r.symbol} ──`);
+      }
+      if (r.trades.length === 0) {
+        lines.push('    (no trades)');
+      } else {
+        for (let i = 0; i < r.trades.length; i++) {
+          const t = r.trades[i];
+          const dir = t.pnl >= 0 ? '+' : '';
+          lines.push(
+            `    #${i + 1}  ${fmtDate(t.entryDate)} → ${fmtDate(t.exitDate)}  ` +
+              `${t.shares}sh @ $${t.entryPrice} → $${t.exitPrice}  ` +
+              `${dir}$${fmtNum(t.pnl)} (${dir}${t.returnPct}%)  [${t.reason}]`,
+          );
+        }
+      }
+      lines.push('');
+    }
+    lines.push('─'.repeat(72));
+  }
+
+  lines.push(`  Generated: ${new Date().toISOString()}`);
+  lines.push('═'.repeat(72));
+
+  return lines.join('\n');
+}
+
+/**
+ * Aggregate an array of backtest results into summary metrics.
+ */
+export function aggregateResults(results) {
+  const list = Array.isArray(results) ? results : [results];
+  const n = list.length;
+
+  const combinedPnL = round2(list.reduce((s, r) => s + r.totalPnL, 0));
+  const combinedInitial = list.reduce((s, r) => s + r.initialCapital, 0);
+  const combinedFinalCapital = round2(list.reduce((s, r) => s + r.finalCapital, 0));
+  const combinedReturn = combinedInitial > 0 ? round2((combinedPnL / combinedInitial) * 100) : 0;
+  const avgSharpe = round2(list.reduce((s, r) => s + r.sharpeRatio, 0) / n);
+  const avgWinRate = round2(list.reduce((s, r) => s + r.winRate, 0) / n);
+  const avgMaxDrawdown = round2(list.reduce((s, r) => s + r.maxDrawdown, 0) / n);
+  const totalTrades = list.reduce((s, r) => s + r.totalTrades, 0);
+
+  return {
+    combinedPnL,
+    combinedReturn,
+    combinedFinalCapital,
+    combinedInitialCapital: combinedInitial,
+    avgSharpe,
+    avgWinRate,
+    avgMaxDrawdown,
+    totalTrades,
+    tickerCount: n,
+  };
+}
+
+// ── Formatting helpers (internal) ────────────────────────────────────────────
+
+function pad(str, width) {
+  return String(str).padEnd(width);
+}
+
+function fmtNum(n) {
+  return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDollar(n) {
+  const prefix = n < 0 ? '-$' : '$';
+  return `${prefix}${fmtNum(Math.abs(n))}`;
+}
+
+function fmtPct(n) {
+  return `${n >= 0 ? '' : ''}${n.toFixed(2)}%`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return 'N/A';
+  return iso.slice(0, 10);
+}

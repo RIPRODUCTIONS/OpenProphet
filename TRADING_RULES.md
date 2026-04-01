@@ -1,344 +1,229 @@
 # Trading Rules
 
-**Updated:** November 26, 2025
-**Style:** Aggressive discretionary options trading with scalping overlay
+**Updated:** March 28, 2026
+**Style:** Conservative micro-account options trading — defined risk only
+**Account Size:** $100 (paper: $100K for testing, live: $100)
 
 ---
 
 ## Core Philosophy
 
-- **Options-only trading** - No stock positions
-- **Long bias** - Calls preferred, occasional puts for hedging
-- **Active management** - Multiple positions, frequent monitoring
-- **Discretionary execution** - Rules are guidelines, not hard constraints
-- **Pattern Day Trader** - Unlimited day trades with $100K+ equity
+- **Options-only trading** — No stock positions
+- **Defined risk ONLY** — Every trade has a known max loss before entry
+- **Debit spreads are the primary weapon** — $1-wide verticals on liquid underlyings
+- **Survival first** — Preserve capital. One bad trade can wipe 30%+ of a $100 account
+- **Paper until proven** — Run 30+ paper trades with >1.0 profit factor before going live
+- **One position at a time** — No portfolio to manage, just one focused bet
 
 ---
 
 ## Position Sizing
 
-**Rule:** Maximum 15% of portfolio per position
-- Calculate: `position_value / portfolio_value ≤ 0.15`
-- Example: $100K portfolio → max $15K per position
-- Rationale: Allows concentrated bets on high-conviction setups
+**Rule:** Maximum 30% of account per trade ($30 on $100 account)
+- On paper ($100K): Scale proportionally — max $30K per position to simulate real constraints
+- On live ($100): One $1-wide debit spread = $30-$80 max risk
+- NEVER risk more than 1 contract at a time on live
 
-**Rule:** Maximum 40% in any single sector
-- Sectors: Tech (NVDA/AMD/TSLA), Crypto (MSTR/MARA/COIN), Broad Market (SPY/QQQ)
-- Prevents: Sector-wide correlation wipeouts
-- Allow: Multiple positions in strong trending sectors
+**Rule:** Maximum 1 open position at a time
+- Simplifies management for autonomous agent
+- Forces selectivity — only take the best setup
+- Exception: Can open a second position if first is >+30% and trailing stop is set
 
-**Rule:** Maximum 10 positions simultaneously
-- Simplifies: Portfolio management and monitoring
-- Prevents: Over-diversification (diworsification)
-- Focus: Quality over quantity
-
----
-
-## Day Trading
-
-**Rule:** Unlimited day trades (Pattern Day Trader status)
-- Requirement: Maintain $25K+ equity at all times
-- Current status: $108K portfolio ✅
-- Monitor: Don't abuse - each round trip has costs
-- Target: <5 scalps per session to maintain selectivity
-
-**Why:** Full flexibility to enter/exit positions same-day without restrictions
+**Rule:** Maintain 50%+ cash at all times
+- On a $100 account, never have more than $50 deployed
+- Allows averaging into a position if thesis holds but entry was early
 
 ---
 
-## Risk Management
+## Allowed Strategies (Ranked by Priority)
 
-**Rule:** Manual discretionary stops (no automatic -15%)
-- Monitor: Positions 2-3x per day (open, midday, close)
-- Cut losers: When thesis breaks or position down >15%
-- Examples from today: QQQ -15.6% (cut immediately), MSTR/TSLA/NVDA (cut when weak)
+### 1. Vertical Debit Spreads (Primary Strategy)
+- **Bull call spread:** Buy ATM call, sell $1 OTM call — max risk = debit paid
+- **Bear put spread:** Buy ATM put, sell $1 OTM put — max risk = debit paid
+- **Why:** Defined risk, cheap entry ($30-80), profits from directional move
+- **Target tickers:** SPY, QQQ, AAPL, AMD, NVDA (liquid options, tight spreads)
 
-**Rule:** Take profits at +25-50% or on technical signals
-- Partial exits: Consider 50% reduction at +25%, let rest run
-- Full exits: Lock profits before major events (holidays, earnings)
-- Don't get greedy: A winner can become a loser quickly
+### 2. Single Long Options (Secondary — High Conviction Only)
+- Buy cheap OTM calls/puts on low-priced stocks
+- Max cost: $50 per contract
+- **Warning:** Most expire worthless. Only use when technical + catalyst alignment is strong
+- Acceptable tickers: SOFI, PLTR, F, BAC, AMD (stocks with options under $1)
 
-**Rule:** Maximum -5% portfolio loss per day
-- Hard stop: If portfolio drops 5% intraday, cease trading
-- Reset: Come back next session with clear head
-- Prevent: Revenge trading and emotional spirals
+### 3. NOT ALLOWED
+- ❌ Naked calls or puts
+- ❌ Credit spreads (require margin/collateral beyond $100)
+- ❌ Iron condors (too complex for micro-account)
+- ❌ Covered calls (can't afford 100 shares of anything)
+- ❌ 0DTE options (pure gambling at this account size)
+- ❌ Scalping (transaction costs eat micro-accounts alive)
 
 ---
 
 ## Options Selection
 
-### **Swing Positions (Core Holdings)**
+**Rule:** 14-45 DTE for all positions
+- Under 14 DTE: Theta decay accelerates, time pressure too high
+- Over 45 DTE: Too expensive for micro-account, capital tied up too long
+- Sweet spot: 21-30 DTE (weeklies or front-month monthlies)
 
-**Rule:** 50-120 DTE for swing positions
-- Rationale: Minimize theta decay, time for thesis to develop
-- Sweet spot: 60-90 DTE (monthlies 2-3 months out)
-- Examples from today: Jan positions (51 DTE), March positions (114 DTE)
+**Rule:** Delta 0.35-0.55 for long leg
+- ATM to slightly OTM — best risk/reward ratio
+- Avoid deep OTM (delta <0.20) — low probability lottery tickets
+- Avoid deep ITM (delta >0.70) — too expensive, no leverage
 
-**Rule:** Delta 0.40-0.70 preferred (ATM to slightly ITM)
-- Avoid: Deep OTM lottery tickets (delta <0.30)
-- Avoid: Deep ITM inefficiency (delta >0.80)
-- Sweet spot: ATM calls with leverage and probability
+**Rule:** Bid-ask spread <15% of mid-price
+- Check: `(ask - bid) / mid < 0.15`
+- Wider spreads are acceptable on micro-accounts due to limited choices
+- Still use LIMIT ORDERS ONLY — never market orders on options
 
----
-
-### **Scalp Positions (Short-Term)**
-
-**Rule:** 2-5 DTE allowed for scalps
-- Purpose: Capture intraday/overnight momentum
-- Risk: High theta decay, must close same day or next day
-- Examples from today: SPY/QQQ 2 DTE scalps (11/28 exp on 11/26)
-
-**Rule:** Close all scalps by EOD or by -15% stop
-- No overnight holds: On 1-2 DTE options (too much weekend/gap risk)
-- Exception: 3-5 DTE can hold overnight if strong conviction
-- Always set mental stop: Exit immediately if down >15%
+**Rule:** Minimum open interest of 100 on both legs
+- Ensures fills are realistic
+- Low open interest = bad fills = guaranteed loss
 
 ---
 
-### **Liquidity & Spreads**
+## Entry Rules
 
-**Rule:** Bid-ask spread <10% of mid-price
-- Check: `(ask - bid) / mid < 0.10`
-- Prevents: Slippage eating into profits
-- Examples: SPY/QQQ/NVDA options (tight spreads)
+**Rule:** Require 2 of 3 technical confirmations before entry
+1. **RSI signal:** Oversold (<30) for calls, overbought (>70) for puts
+2. **MACD cross:** Bullish crossover for calls, bearish for puts
+3. **Price action:** Bounce off support for calls, rejection at resistance for puts
 
-**Rule:** LIMIT ORDERS ONLY
-- Never: Use market orders on options (too much slippage)
-- Always: Set limit at mid-price or better
-- Patient: Let order fill, don't chase
+**Rule:** Check news before every entry
+- No entering before known catalysts (earnings, Fed, CPI) unless that IS the thesis
+- Catalyst trades require extra conviction and tighter stops
 
----
-
-## Trade Execution
-
-**Rule:** Opening volatility trading allowed (9:30-9:45 AM)
-- Rationale: Best momentum and volume during first 15 minutes
-- Caution: Use limit orders, don't chase gaps
-- Examples from today: 9:30 AM scalp entries on SPY/QQQ
-
-**Rule:** Maximum 10 trades per day (entries + exits)
-- Prevents: Over-trading and transaction cost bleed
-- Focus: Quality setups, not quantity
-- Track: Each trade costs ~$5-10 in fees + slippage
-
-**Rule:** Maximum 5 scalp entries per day
-- Core positions: Can open 5+ swing trades if high conviction
-- Scalps: Limit to 5 per day to maintain discipline
-- Rationale: Scalping is high-cost, need high win rate
+**Rule:** Only enter during regular market hours (9:30 AM - 4:00 PM ET)
+- Best liquidity and tightest spreads
+- Avoid first 15 minutes (9:30-9:45) — too volatile for micro-accounts
+- Avoid last 15 minutes (3:45-4:00) — spreads widen
 
 ---
 
-## Decision Logging
+## Exit Rules
 
-**Rule:** Log all major decisions to `decisive_actions/`
-- Before: Major position entries (optional but recommended)
-- After: End of day summary, major exits, strategic decisions
-- Format: Use `mcp__prophet__log_decision` tool
-- Purpose: Audit trail, learning from mistakes
+**Rule:** Take profit at +40-60%
+- +40%: Begin looking to close
+- +50%: Strong close signal — lock it in
+- +60%: Hard exit — don't get greedy on a $30 bet
+- Partial exits not practical with 1 contract — it's all or nothing
 
-**Rule:** Log daily activity to `activity_logs/`
-- Track: Position checks, analysis, intelligence gathering
-- Format: Use `mcp__prophet__log_activity` tool
-- Review: Weekly to identify patterns
+**Rule:** Stop loss at -35%
+- Hard stop: If position is down 35% of debit paid, close immediately
+- On a $30 spread, that's a $10.50 loss — painful but survivable
+- NEVER hold to expiration hoping for recovery
 
----
+**Rule:** Time stop at 50% of DTE elapsed
+- If a 30 DTE trade hasn't moved by day 15, close it
+- Theta is accelerating and thesis may be wrong
+- Take whatever is left rather than watching it decay to zero
 
-## Agent Consultation (Optional)
-
-Agents are **advisory, not required**. Use them when you want:
-
-### **1. Strategic Analysis (CEO Agent)**
-- Portfolio-level strategy decisions
-- Capital allocation across multiple positions
-- Risk assessment before major deployments
-- Post-mortem analysis of bad trades
-
-### **2. Technical Setup Identification (Strategy Agent)**
-- High-conviction directional setups
-- Technical confluence analysis
-- Entry/exit price recommendations
-- Risk/reward optimization
-
-### **3. Risk De-Risking (Consultant/Daedalus Agent)**
-- Pressure-test your assumptions
-- Identify blind spots and biases
-- Challenge emotional trades
-- Behavioral pattern recognition
-
-**When to use:**
-- Before deploying >$20K in new positions
-- After 3 consecutive losses
-- When feeling emotional or uncertain
-- Weekly portfolio review
-
-**When NOT needed:**
-- Routine position management
-- Small scalp trades (<$5K)
-- Taking profits on winners
-- Following pre-defined exits
+**Rule:** Close before weekends if position is down
+- Don't hold losing positions over weekends — gap risk destroys micro-accounts
+- Exception: Winners can hold over weekends if thesis is intact
 
 ---
 
-## Overnight & Weekend Positions
+## Risk Management
 
-**Rule:** Review all positions at 12:50 PM on early close days, 3:50 PM on normal days
-- Decide: Hold overnight or close?
-- Consider: Overnight news risk, earnings, economic data
-- Weekend: Close <7 DTE positions by Friday close if uncomfortable
+**Rule:** Maximum -10% account loss per day
+- On $100 live: If account drops to $90, stop trading for the day
+- On paper: Same discipline — treat it like real money
+- Reset: Come back next session with clear analysis of what went wrong
 
-**Rule:** Close <3 DTE positions before holidays/weekends
-- Rationale: Gap risk over 3-4 day weekends
-- Examples from today: Closed all 2 DTE scalps, held 51-114 DTE swings
-- Exception: Can hold 3-7 DTE if high conviction and willing to accept gap risk
-
----
-
-## Profit-Taking Strategy
-
-**Rule:** Lock partial profits at +25%
-- Action: Consider closing 50% of position
-- Benefit: Take some off table, let rest run
-- Move stop: On remaining position to breakeven
-
-**Rule:** Full exit at +50% or on technical breakdown
-- Don't be greedy: 50% is an excellent win
-- Technical: If trend breaks, take profits even if no target hit
-- Protect: Winners can become losers quickly
-
-**Rule:** Before major events (holidays, earnings)
-- Today's example: Closed December SPY calls (+22%, +34%) before Thanksgiving
-- Rationale: 4-day weekend gap risk, lock in gains
-- Keep: Only positions with 50+ DTE and willing to hold through event
-
----
-
-## Loss-Cutting Discipline
-
-**Rule:** Cut losers when thesis breaks OR down >15%
-- Thesis break: Expected catalyst didn't materialize, technical structure failed
-- Down >15%: Automatic exit regardless of thesis
-- No hope: Don't hold and hope it comes back
-
-**Rule:** Cut all positions if daily loss hits -5%
-- Circuit breaker: Prevents catastrophic loss days
-- Reset: Stop trading, come back tomorrow
-- Reflect: What went wrong? Discipline failure or bad luck?
+**Rule:** Maximum -20% account drawdown before full stop
+- If account drops from $100 to $80, cease ALL trading
+- Review every trade in the log
+- Identify pattern: Was it strategy failure or execution failure?
+- Only resume after documenting what changed
 
 **Rule:** No revenge trading
-- Definition: Re-entering same symbol within 2 hours after stop out
-- Why: Emotional decision, usually loses more money
-- Cool off: Wait until next session or at least 2 hours
+- After a loss, wait minimum 24 hours before next entry
+- Autonomous agent should enforce this via cooldown timer
+- Emotional re-entry after stops is the #1 micro-account killer
+
+**Rule:** Track every trade in the activity log
+- Entry price, exit price, P/L, thesis, what went right/wrong
+- After 30 trades, calculate: win rate, avg win, avg loss, profit factor
+- Only go live if profit factor > 1.2 and win rate > 40%
 
 ---
 
-## Transaction Cost Management
+## Agent Behavior
 
-**Rule:** Target <5% transaction costs per trade
-- Calculate: `(fees + slippage) / gross profit < 0.05`
-- Minimize: Use limit orders, trade liquid options, hold longer
-- Track: Monthly transaction cost budget = $200
+**Rule:** Heartbeat schedule
+- Pre-market (8:00-9:30 AM ET): 15 min intervals — scan news, identify setups
+- Market open (9:30-9:45 AM): NO TRADES — observe only
+- Active trading (9:45 AM - 3:45 PM): 10 min intervals — check signals, manage position
+- Market close (3:45-4:00 PM): 5 min intervals — decide hold vs. close
+- After hours: 60 min intervals — review only, no trades
+- Weekends: 4 hour intervals — research and strategy review only
 
-**Rule:** Hold scalps at least until profitable or stop hit
-- Avoid: Panic exits on minor pullbacks
-- Allow: Thesis time to develop (at least 30 minutes to 1 hour)
-- Exception: If down >10% and momentum clearly broken, cut early
+**Rule:** Maximum 2 trades per day (1 entry + 1 exit, or 2 exits)
+- Micro-accounts cannot afford frequent trading
+- Quality over quantity — wait for the A+ setup
 
----
+**Rule:** Agent must state thesis before every trade
+- Log to `decisive_actions/` before placing any order
+- Format: "Buying [spread] because [technical signal] + [catalyst/news]"
+- If agent cannot articulate clear thesis, DO NOT TRADE
 
-## Position Management
-
-**Rule:** Check positions 2-3x per day
-- Open (9:30-10:00 AM): Review overnight action
-- Midday (12:00-1:00 PM): Check if any stops need adjusting
-- Close (3:30-4:00 PM): Decide holds vs. closes
-
-**Rule:** Don't obsessively watch positions
-- Avoid: Staring at screens and reacting to every tick
-- Trust: Your thesis and stops
-- Detach: Emotional attachment leads to bad decisions
-
----
-
-## Portfolio Construction
-
-**Rule:** Maintain 50-70% cash at all times
-- Rationale: Dry powder for opportunities
-- Prevents: Being fully invested at market tops
-- Allows: Deploying capital when great setups appear
-
-**Rule:** Diversify across time frames
-- Core swings: 50-120 DTE positions (60-70% of deployed capital)
-- Short-term: 2-7 DTE scalps (30-40% of deployed capital)
-- Balance: Theta decay vs. leverage
-
-**Rule:** Diversify across sectors (but allow concentration)
-- Preferred: 3-5 different underlyings
-- Allow: Up to 40% in one hot sector if trending hard
-- Examples from today: SPY, AMD, NVDA, COIN, PLTR, AMZN (6 underlyings)
-
----
-
-## Behavioral Discipline
-
-**Rule:** No trading when emotional
-- Angry, frustrated, anxious, euphoric = bad decisions
-- Step away: Take a walk, come back in 30 minutes
-- Reset: Clear head required for good trading
-
-**Rule:** No "I need to make back losses" thinking
-- Each trade: Independent decision
-- Sunk costs: Ignore previous losses
-- Focus: Best trade right now, not making back yesterday
-
-**Rule:** Accept that losses are part of trading
-- Win rate: Target 40-60% (most trades will lose)
-- What matters: Profit factor (winners bigger than losers)
-- Today's example: QQQ -$960, SPY +$1,920 = net +$960
+**Rule:** Paper trading mode by default
+- Agent starts in paper mode always
+- Live trading requires explicit manual override
+- Agent should never switch itself to live mode
 
 ---
 
 ## Weekly Review (Sunday)
 
 **Rule:** Review all trades from the week
-- What worked: Which setups, which decisions
-- What didn't: Mistakes, violations, emotional trades
-- Patterns: Am I repeating same mistakes?
+- What worked: Which setups delivered
+- What didn't: Losses, missed exits, bad entries
+- Strategy adjustment: Update rules based on actual results
 
-**Rule:** Update rules if needed
-- Evolve: Based on actual behavior and results
-- Document: What you're actually doing, not aspirational rules
-- Simplify: Remove rules you never follow
+**Rule:** Track these metrics weekly
 
----
-
-## Simple Pre-Trade Checklist
-
-- [ ] Position size under 15% of portfolio?
-- [ ] Total positions under 10?
-- [ ] Daily trades under 10?
-- [ ] Limit order at mid-price or better?
-- [ ] Stop loss level mentally defined?
-- [ ] Profit target mentally defined?
-- [ ] Spread <10% of mid-price?
-- [ ] Liquid options with volume?
-- [ ] Clear thesis (why this trade, why now)?
-
-**If any answer is NO, reconsider the trade.**
+| Metric | Target |
+|--------|--------|
+| Win rate | >40% |
+| Avg win | >$15 |
+| Avg loss | <$12 |
+| Profit factor | >1.2 |
+| Max drawdown | <20% |
+| Trades/week | 2-5 |
 
 ---
 
-## Key Lessons from Today (November 26, 2025)
+## Graduation Criteria (Paper → Live)
 
-✅ **Cut losers fast** - QQQ scalp -15.6%, cut immediately
-✅ **Let winners run** - SPY scalp went -$180 → +$1,920
-✅ **Lock profits before holidays** - Closed December positions
-✅ **Clean portfolio** - Cut all losing positions (MSTR, TSLA, NVDA, SPY put)
-✅ **No theta risk** - All remaining positions 51-114 DTE
-✅ **Use limit orders** - Zero market orders, zero slippage disasters
-✅ **Log decisions** - Documented HOLD_ALL decision at 11:50 AM
+- [ ] 30+ paper trades completed
+- [ ] Profit factor > 1.2
+- [ ] Win rate > 40%
+- [ ] Max drawdown < 20%
+- [ ] No revenge trades in last 10 trades
+- [ ] Agent thesis accuracy > 50% (did the market move in predicted direction?)
+- [ ] All trades logged with complete entry/exit rationale
+
+**When all boxes are checked, fund Alpaca live account with $100 and switch endpoint.**
 
 ---
 
-**The goal is profitable trading with manageable risk.**
+## Pre-Trade Checklist (Agent Must Verify)
 
-These rules reflect what you're actually doing. Adjust based on results. Stay flexible, stay disciplined.
+- [ ] Only 0 or 1 open positions?
+- [ ] Position cost < 30% of account?
+- [ ] DTE between 14-45?
+- [ ] Bid-ask spread < 15% of mid?
+- [ ] Open interest > 100 on both legs?
+- [ ] 2 of 3 technical signals confirmed?
+- [ ] No major catalyst in next 24h (unless thesis)?
+- [ ] Clear thesis documented?
+- [ ] Within trading hours (9:45 AM - 3:45 PM ET)?
+- [ ] Not in 24h cooldown from last loss?
+
+**If any answer is NO, do not trade.**
+
+---
+
+**The goal is not to get rich on $100. The goal is to build a proven, autonomous system that survives and compounds. Scale comes after the system proves itself.**

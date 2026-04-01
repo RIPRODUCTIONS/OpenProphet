@@ -1,0 +1,95 @@
+{
+  "id": "crypto-dca",
+  "name": "Crypto DCA — Dollar-Cost Averaging Bot",
+  "description": "Automated dollar-cost averaging into a diversified crypto portfolio. Executes scheduled buys at fixed intervals regardless of price. Long-term accumulation strategy with optional rebalancing. Set it and forget it — the bot handles timing, sizing, and portfolio drift.",
+  "version": "1.0.0",
+  "assetClasses": ["crypto"],
+
+  "riskGuard": {
+    "maxPositionPct": 100,
+    "maxCashDeployedPct": 95,
+    "maxOpenPositions": 10,
+    "maxDailyTrades": 6,
+    "maxDailyLossPct": null,
+    "maxDrawdownPct": null,
+    "revengeCooldownMs": 0,
+    "dteMin": null,
+    "dteMax": null,
+    "deltaMin": null,
+    "deltaMax": null,
+    "minOpenInterest": null,
+    "maxBidAskSpreadPct": null,
+    "noTradeOpenMinutes": 0,
+    "noTradeCloseMinutes": 0,
+    "marketOpenMinutes": 0,
+    "marketCloseMinutes": 1440,
+    "cryptoMode": true,
+    "maxSlippagePct": 0.5,
+    "minOrderValueUSD": 10
+  },
+
+  "heartbeat": {
+    "scheduled": { "seconds": 3600,  "label": "Hourly DCA Check",    "range": null },
+    "daily":     { "seconds": 86400, "label": "Daily DCA Execution",  "range": null },
+    "weekly":    { "seconds": 604800,"label": "Weekly DCA Execution",  "range": null },
+    "rebalance": { "seconds": 3600,  "label": "Rebalance Check",      "range": null },
+    "monitor":   { "seconds": 7200,  "label": "Portfolio Monitor",    "range": null }
+  },
+
+  "agentPrompt": "You are a dollar-cost averaging bot. You execute scheduled buys into a diversified crypto portfolio at fixed intervals. You do NOT try to time the market. Your job is consistent execution, not prediction.\n\n## Core Behavior\n- Execute scheduled buys based on the configured interval (hourly/daily/weekly)\n- Buy the configured amount regardless of price action\n- Track cost basis and portfolio allocation\n- Rebalance when any single position exceeds 40% of portfolio value\n\n## Buy Schedule\n- Each heartbeat: check if a scheduled buy is due\n- Execute buys across configured portfolio weights\n- Log every purchase with timestamp, price, amount, and running cost basis\n- If a buy fails (insufficient funds, exchange error), retry next heartbeat\n\n## Portfolio Weights\n- BTC: 50% of each DCA amount\n- ETH: 30% of each DCA amount\n- SOL: 20% of each DCA amount\n- Weights are configurable — adjust via strategy rules\n\n## Rebalancing\n- Check allocation drift every heartbeat\n- If any position exceeds 40% of total portfolio value: sell excess, buy underweight\n- Rebalance threshold: 5% drift from target weight triggers rebalance\n- Never sell more than 10% of any position in a single rebalance\n\n## Buy Sizing\n- Configurable: $50-$100 per interval (default $75)\n- Minimum order: $10 per asset (skip if allocation would be less)\n- Use limit orders at mid-price for better execution\n- If spread >1%, wait for next heartbeat\n\n## What You DON'T Do\n- No selling based on price drops (this is accumulation, not trading)\n- No stop-losses (long-term hold strategy)\n- No adjusting buy amounts based on market conditions\n- No leverage, no margin, no derivatives\n- No panic selling — the whole point is to buy through volatility\n\n## Exception: Emergency Halt\n- If exchange shows signs of insolvency or withdrawal freeze: halt all buys\n- If a configured asset is delisted: stop buying it, do not sell existing",
+
+  "rules": {
+    "schedule": {
+      "interval": "daily",
+      "amountUSD": 75,
+      "minAmountUSD": 50,
+      "maxAmountUSD": 100
+    },
+    "portfolio": {
+      "weights": {
+        "BTC/USDT": 0.50,
+        "ETH/USDT": 0.30,
+        "SOL/USDT": 0.20
+      }
+    },
+    "rebalance": {
+      "enabled": true,
+      "maxPositionPct": 40,
+      "driftThresholdPct": 5,
+      "maxSellPctPerRebalance": 10,
+      "checkInterval": "daily"
+    },
+    "execution": {
+      "orderType": "limit",
+      "maxSpreadPct": 1.0,
+      "retryOnFailure": true,
+      "retryDelayMs": 60000,
+      "skipIfBelowMinOrder": true
+    },
+    "tracking": {
+      "logCostBasis": true,
+      "logPortfolioValue": true,
+      "weeklyReport": true
+    }
+  },
+
+  "exchanges": {
+    "primary": "coinbase",
+    "fallback": "kraken",
+    "config": {
+      "coinbase": {
+        "sandbox": true,
+        "orderType": "limit"
+      },
+      "kraken": {
+        "sandbox": true,
+        "orderType": "limit"
+      }
+    }
+  },
+
+  "symbols": {
+    "primary": ["BTC/USDT", "ETH/USDT", "SOL/USDT"],
+    "note": "Long-term accumulation portfolio. Stick to high-conviction, high-market-cap assets only."
+  }
+}

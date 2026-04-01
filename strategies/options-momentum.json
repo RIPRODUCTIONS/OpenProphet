@@ -1,0 +1,79 @@
+{
+  "id": "options-momentum",
+  "name": "Options Momentum — Aggressive Directional Plays",
+  "description": "Aggressive single-leg options strategy targeting strong directional momentum. Shorter DTE, higher delta, and bigger profit targets than the conservative preset. Requires strong RSI + MACD confluence before entry. For accounts that can tolerate higher variance in exchange for larger wins.",
+  "version": "1.0.0",
+  "assetClasses": ["options"],
+
+  "riskGuard": {
+    "accountSize": 100,
+    "maxPositionPct": 20,
+    "maxCashDeployedPct": 40,
+    "maxOpenPositions": 2,
+    "maxDailyTrades": 4,
+    "maxDailyLossPct": 15,
+    "maxDrawdownPct": 25,
+    "revengeCooldownMs": 43200000,
+    "dteMin": 7,
+    "dteMax": 21,
+    "deltaMin": 0.40,
+    "deltaMax": 0.65,
+    "minOpenInterest": 200,
+    "maxBidAskSpreadPct": 12,
+    "noTradeOpenMinutes": 15,
+    "noTradeCloseMinutes": 15,
+    "marketOpenMinutes": 570,
+    "marketCloseMinutes": 960
+  },
+
+  "heartbeat": {
+    "pre_market":   { "seconds": 600,  "label": "Pre-Market Intel",     "range": [240, 570]  },
+    "market_open":  { "seconds": 90,   "label": "Open Momentum Scan",   "range": [570, 600]  },
+    "active":       { "seconds": 300,  "label": "Momentum Hunting",     "range": [600, 930]  },
+    "market_close": { "seconds": 120,  "label": "Close Management",     "range": [930, 960]  },
+    "after_hours":  { "seconds": 1800, "label": "After Hours Review",   "range": [960, 1200] },
+    "closed":       { "seconds": 3600, "label": "Markets Closed",       "range": null },
+    "weekend":      { "seconds": 14400,"label": "Weekend Research",     "range": null }
+  },
+
+  "agentPrompt": "You are an aggressive momentum options trader. You trade single-leg calls and puts, targeting strong directional moves with higher conviction thresholds than a conservative strategy. You accept higher risk for proportionally larger gains.\n\n## Core Philosophy\n- Trade momentum, not mean reversion\n- High conviction only — require RSI AND MACD confluence\n- Shorter DTE means faster theta decay — be right or get out fast\n- Two positions max, but each should have strong independent theses\n\n## Entry Criteria (ALL required)\n1. RSI signal: below 25 (calls) or above 75 (puts) — more extreme than conservative\n2. MACD crossover confirmed on both 1h and 4h timeframes\n3. Volume >1.5x 20-day average (momentum confirmation)\n4. No conflicting signals across timeframes\n\n## Options Selection\n- DTE: 7-21 days (front-week to front-month)\n- Delta: 0.40-0.65 (slightly ITM to ATM)\n- Both single calls/puts AND vertical debit spreads are allowed\n- Open interest >200 on selected strike\n- Bid-ask spread <12% of mid price\n\n## Position Sizing\n- Max 20% of account per position\n- Max 2 positions open simultaneously\n- Second position requires first to be profitable or at breakeven\n- Scale in allowed: 50% initial, add remaining 50% if momentum continues\n\n## Exit Rules\n- Profit targets: +50% start trailing, +80% hard exit\n- Stop loss: -25% of premium paid, HARD stop no exceptions\n- Time stop: close at 60% of DTE elapsed\n- Momentum reversal: if RSI crosses back through 50, close regardless of P/L\n- Friday rule: close all positions by 3:30 PM ET on Fridays\n\n## Banned\n- No naked selling\n- No 0DTE\n- No earnings plays (IV crush destroys momentum entries)\n- No adding to losing positions\n- No holding through FOMC/CPI if not the original thesis",
+
+  "rules": {
+    "allowedStrategies": ["single_long_option", "vertical_debit_spread"],
+    "allowedDirections": ["long_call", "long_put", "bull_call_spread", "bear_put_spread"],
+    "profitTarget": { "startTrailing": 0.50, "hardExit": 0.80 },
+    "stopLoss": 0.25,
+    "timeStopPct": 0.60,
+    "technicalConfirmations": {
+      "required": "all",
+      "signals": ["rsi_extreme", "macd_multi_timeframe", "volume_spike"]
+    },
+    "rsiThresholds": { "oversold": 25, "overbought": 75, "neutralCross": 50 },
+    "volumeSpikeMultiplier": 1.5,
+    "macdTimeframes": ["1h", "4h"],
+    "scaleIn": {
+      "enabled": true,
+      "initialPct": 0.50,
+      "addPct": 0.50,
+      "requireMomentumContinuation": true
+    },
+    "fridayCloseTime": "15:30",
+    "noEarningsPlays": true
+  },
+
+  "exchanges": {
+    "primary": "alpaca",
+    "config": {
+      "alpaca": {
+        "env": "paper",
+        "orderType": "limit"
+      }
+    }
+  },
+
+  "symbols": {
+    "primary": ["SPY", "QQQ", "NVDA", "AMD"],
+    "secondary": ["AAPL", "TSLA", "META", "AMZN"],
+    "note": "Focus on high-momentum, high-liquidity names. Avoid low-float or meme stocks."
+  }
+}

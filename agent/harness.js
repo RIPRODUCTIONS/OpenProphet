@@ -4,6 +4,7 @@ import { spawn, execSync } from 'child_process';
 import { EventEmitter } from 'events';
 import fs from 'fs/promises';
 import path from 'path';
+import http from 'http';
 
 // Default max tool rounds; overridden by permissions config at runtime
 
@@ -15,6 +16,7 @@ export const PHASE_DEFAULTS = {
   market_close: { seconds: 120,  label: 'Market Close',  range: [900, 960]  },
   after_hours:  { seconds: 1800, label: 'After Hours',   range: [960, 1200] },
   closed:       { seconds: 3600, label: 'Markets Closed', range: null },
+  weekend:      { seconds: 14400, label: 'Weekend', range: null },
 };
 
 export function getCurrentPhase() {
@@ -22,8 +24,9 @@ export function getCurrentPhase() {
   const et = now.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false });
   const [h, m] = et.split(':').map(Number);
   const mins = h * 60 + m;
-  const weekday = now.getDay() >= 1 && now.getDay() <= 5;
-  if (!weekday) return 'closed';
+  const day = now.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' });
+  const weekday = !['Sat', 'Sun'].includes(day);
+  if (!weekday) return 'weekend';
   for (const [phase, cfg] of Object.entries(PHASE_DEFAULTS)) {
     if (cfg.range && mins >= cfg.range[0] && mins < cfg.range[1]) return phase;
   }
@@ -40,7 +43,10 @@ export async function buildSystemPrompt(agentConfig, options = {}) {
     const strategy = getStrategyById(agentConfig.strategyId);
     if (strategy) {
       if (strategy.rulesFile) {
-        try { strategyRules = await fs.readFile(path.join(process.cwd(), strategy.rulesFile), 'utf-8'); } catch (err) { console.error(`Warning: Failed to load strategy rules file "${strategy.rulesFile}":`, err.message); }
+        try { strategyRules = await fs.readFile(path.join(process.cwd(), strategy.rulesFile), 'utf-8'); } catch (err) {
+          console.error(`Warning: Failed to load strategy rules file "${strategy.rulesFile}":`, err.message);
+          if (strategy.customRules) strategyRules = strategy.customRules;
+        }
       } else if (strategy.customRules) {
         strategyRules = strategy.customRules;
       }
@@ -68,13 +74,28 @@ export async function buildSystemPrompt(agentConfig, options = {}) {
 
 **Trading**: get_account, get_positions, get_orders, place_buy_order, place_sell_order, place_managed_position, get_managed_positions, close_managed_position, cancel_order
 **Options**: place_options_order, get_options_positions, get_options_position, get_options_chain
+**Crypto**: place_crypto_order, cancel_crypto_order, get_crypto_balance, get_crypto_positions, get_crypto_ticker, get_crypto_orderbook, get_crypto_ohlcv, get_crypto_exchanges, get_crypto_markets, get_crypto_open_orders, close_all_crypto_orders
 **Market Data**: get_quote, get_latest_bar, get_historical_bars, analyze_stocks
 **News**: get_news, search_news, get_market_news, get_quick_market_intelligence, get_cleaned_news, get_marketwatch_topstories
+**Risk & Sizing**: get_risk_guard_status, analyze_portfolio_correlation, calculate_position_size, analyze_volatility, detect_market_regime
+**Performance**: get_performance_report, get_execution_stats, record_execution
+**Alerts**: send_alert
 **Agent Config**: update_agent_prompt, update_strategy_rules, get_agent_config, set_heartbeat, update_permissions, set_session_mode, create_agent, create_strategy, assign_agent_to_sandbox
 **Heartbeat**: get_heartbeat_profiles, apply_heartbeat_profile, get_heartbeat_phases, update_heartbeat_phase
 **Logging**: log_decision, log_activity, get_activity_log
 **Trade History**: find_similar_setups, store_trade_setup, get_trade_stats
 **Utility**: get_datetime, wait
+
+## Pre-Trade Checklist (FOLLOW THIS ORDER)
+Before EVERY trade:
+1. **detect_market_regime** — check if market conditions favor trading
+2. **analyze_portfolio_correlation** — check sector concentration before adding
+3. **calculate_position_size** — get Kelly-optimal sizing (pass your win_rate and stop_loss)
+4. **analyze_volatility** — for options: check IV rank, skew, vol premium
+5. **get_risk_guard_status** — confirm you haven't hit daily limits
+6. Place the order. The risk guard will auto-block if rules violated.
+7. **record_execution** — log the fill for slippage tracking
+8. **log_decision** — record your reasoning
 
 ## Heartbeat Behavior
 
@@ -82,11 +103,11 @@ Each heartbeat you should:
 1. Check time and market status
 2. Review account and positions
 3. Decide and act based on phase:
-   - Pre-market: Gather intelligence, plan
+   - Pre-market: Gather intelligence, detect_market_regime, plan
    - Market open: Execute, monitor
    - Midday: Monitor positions, check stops
    - Market close: Review, decide holds
-   - After hours: Review, log activity
+   - After hours: get_performance_report, review, log activity
 4. Follow your strategy rules
 5. Summarize what you did
 
@@ -102,7 +123,8 @@ Heartbeat control:
 - Always log trade reasoning with log_decision.
 - NEVER ask the user questions. You are autonomous.
 - If you need information, use your tools.
-- Each heartbeat is independent - gather data, decide, act, summarize.`;
+- Each heartbeat is independent - gather data, decide, act, summarize.
+- Use send_alert for critical events (large losses, halts, unusual market conditions).`;
 
   return `${identity}\n\n${rulesBlock}\n\n${systemInstructions}`;
 }
@@ -546,7 +568,16 @@ ${userBlock}`;
     if (!this.state.running) return;
     // Always clear any existing timer first to prevent dual timers
     if (this._timer) { clearTimeout(this._timer); this._timer = null; }
-    const seconds = this._getHeartbeatSeconds();
+    let seconds = this._getHeartbeatSeconds();
+
+    // Exponential backoff on consecutive failures: double delay up to 5 min cap
+    const failures = this._consecutiveFailures || 0;
+    if (failures > 0) {
+      const backoff = Math.min(seconds * Math.pow(2, failures), 300);
+      this.state.emit('agent_log', { message: `Backoff: next beat in ${backoff}s (${failures} failures)`, level: 'warn' });
+      seconds = backoff;
+    }
+
     this.state.heartbeatSeconds = seconds;
     this.state.nextBeatTime = new Date(Date.now() + seconds * 1000).toISOString();
     this.state.emit('schedule', { seconds, nextBeat: this.state.nextBeatTime, phase: this.state.phase });
@@ -558,9 +589,36 @@ ${userBlock}`;
         this._scheduleNext();
         return;
       }
+      // Skip Claude calls on weekends — just reschedule silently
+      const phase = this.getCurrentPhaseFn();
+      if (phase === 'weekend') {
+        this.state.phase = phase;
+        this.state.emit('agent_log', { message: 'Weekend — skipping beat (no markets)', level: 'info' });
+        this._scheduleNext();
+        return;
+      }
       await this._beat();
       this._scheduleNext();
     }, seconds * 1000);
+  }
+
+  /** Check Go trading backend health with 3 retries */
+  async _checkGoHealth() {
+    const port = this.opencodeEnv?.TRADING_BOT_URL?.match(/:(\d+)/)?.[1] || process.env.TRADING_BOT_PORT || 4534;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const ok = await new Promise((resolve) => {
+          const req = http.get(`http://localhost:${port}/health`, { timeout: 3000 }, (res) => {
+            resolve(res.statusCode === 200);
+          });
+          req.on('error', () => resolve(false));
+          req.on('timeout', () => { req.destroy(); resolve(false); });
+        });
+        if (ok) return true;
+      } catch { /* retry */ }
+      if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+    }
+    return false;
   }
 
   async _beat() {
@@ -573,6 +631,20 @@ ${userBlock}`;
     const phase = this.getCurrentPhaseFn();
     this.state.phase = phase;
     const model = this.state.activeModel;
+
+    // ── Pre-beat health gate: verify Go backend is alive ──
+    const goHealthy = await this._checkGoHealth();
+    if (!goHealthy) {
+      this.state.stats.errors++;
+      this.state.emit('agent_log', { message: `Beat #${beatNum} SKIPPED: Go backend unreachable (port ${process.env.TRADING_BOT_PORT || 4534})`, level: 'error' });
+      this._beating = false;
+      this._consecutiveFailures = (this._consecutiveFailures || 0) + 1;
+      if (this._consecutiveFailures >= 5) {
+        this.state.emit('agent_log', { message: `Auto-pausing: ${this._consecutiveFailures} consecutive failures`, level: 'error' });
+        this.state.paused = true;
+      }
+      return;
+    }
 
     this.state.emit('beat_start', { beat: beatNum, phase, time: this.state.lastBeatTime });
     this.state.emit('agent_log', {
@@ -613,10 +685,20 @@ ${userBlock}`;
         { role: 'assistant', kind: 'heartbeat', beat: beatNum, phase, toolCalls: result.toolCalls || 0, content: result.text || '' },
       ]);
 
+      // Success — reset failure counter
+      this._consecutiveFailures = 0;
+
     } catch (err) {
       this.state.stats.errors++;
-      this.state.emit('agent_log', { message: `Beat #${beatNum} error: ${err.message}`, level: 'error' });
+      this._consecutiveFailures = (this._consecutiveFailures || 0) + 1;
+      this.state.emit('agent_log', { message: `Beat #${beatNum} error (fail streak: ${this._consecutiveFailures}): ${err.message}`, level: 'error' });
       console.error(`Beat #${beatNum} error:`, err);
+
+      // Auto-pause after 5 consecutive failures
+      if (this._consecutiveFailures >= 5) {
+        this.state.emit('agent_log', { message: `Auto-pausing agent: ${this._consecutiveFailures} consecutive beat failures`, level: 'error' });
+        this.state.paused = true;
+      }
     }
 
     this.state.emit('beat_end', { beat: beatNum, phase });

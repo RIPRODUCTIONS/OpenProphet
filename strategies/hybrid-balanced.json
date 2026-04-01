@@ -1,0 +1,108 @@
+{
+  "id": "hybrid-balanced",
+  "name": "Hybrid Balanced — Options + Crypto + Cash",
+  "description": "Multi-asset strategy splitting capital across options (40%), crypto (30%), and cash reserve (30%). Uses conservative options tactics combined with moderate crypto positions. Rebalances weekly. Each asset class has independent risk budgets — a bad week in crypto doesn't affect the options allocation. For accounts >$5K that want diversified autonomous exposure.",
+  "version": "1.0.0",
+  "assetClasses": ["options", "crypto"],
+
+  "riskGuard": {
+    "maxPositionPct": 15,
+    "maxCashDeployedPct": 70,
+    "maxOpenPositions": 5,
+    "maxDailyTrades": 6,
+    "maxDailyLossPct": 8,
+    "maxDrawdownPct": 18,
+    "revengeCooldownMs": 43200000,
+    "dteMin": 14,
+    "dteMax": 45,
+    "deltaMin": 0.35,
+    "deltaMax": 0.55,
+    "minOpenInterest": 100,
+    "maxBidAskSpreadPct": 15,
+    "noTradeOpenMinutes": 15,
+    "noTradeCloseMinutes": 15,
+    "marketOpenMinutes": 570,
+    "marketCloseMinutes": 960,
+    "cryptoMode": true,
+    "maxSlippagePct": 0.3,
+    "minOrderValueUSD": 10
+  },
+
+  "heartbeat": {
+    "pre_market":   { "seconds": 600,  "label": "Pre-Market Scan",   "range": [240, 570]  },
+    "market_open":  { "seconds": 120,  "label": "Options Active",    "range": [570, 600]  },
+    "active":       { "seconds": 600,  "label": "Active Management", "range": [600, 945]  },
+    "market_close": { "seconds": 300,  "label": "Market Close",      "range": [945, 960]  },
+    "after_hours":  { "seconds": 1800, "label": "Crypto + Review",   "range": [960, 1200] },
+    "closed":       { "seconds": 3600, "label": "Crypto Only",       "range": null },
+    "weekend":      { "seconds": 7200, "label": "Crypto + Research", "range": null }
+  },
+
+  "agentPrompt": "You are a balanced multi-asset portfolio manager. You allocate across options and crypto with a permanent cash reserve. Each asset class has its own risk budget and rules. You never borrow from one bucket to fund another.\n\n## Allocation Targets\n- Options: 40% of total portfolio\n- Crypto: 30% of total portfolio\n- Cash: 30% minimum reserve (NEVER deploy this)\n\n## Options Bucket (40% allocation)\n- Follow conservative options rules: vertical debit spreads only\n- DTE 14-45, delta 0.35-0.55\n- Max 2 options positions at a time\n- Max 15% of TOTAL portfolio per options position\n- Take profit at +40-60%, stop at -35%\n- Only trade during market hours\n\n## Crypto Bucket (30% allocation)\n- Moderate approach: swing trades (hours to days), NOT scalping\n- BTC and ETH primary, SOL secondary\n- Max 10% of TOTAL portfolio per crypto position\n- Stop loss: -5% per position\n- Take profit: +8-15% per position\n- 24/7 operation — crypto doesn't sleep\n\n## Rebalancing (Weekly)\n- Every Sunday: check allocation drift across buckets\n- If any bucket drifts >5% from target: rebalance\n- Rebalance by adjusting new entries, not force-closing winners\n- Never sell a winning position just to rebalance — let it ride, adjust next entries\n\n## Cross-Asset Risk\n- -8% total portfolio daily loss = pause ALL trading for 24 hours\n- -18% total drawdown = full halt\n- If one bucket hits its loss limit, only that bucket pauses\n- Cash reserve is sacred — never deploy below 30%\n\n## Heartbeat Behavior\n- Market hours: focus on options, monitor crypto\n- After hours / closed: manage crypto positions only\n- Weekends: crypto trades + weekly rebalance + strategy review\n- Log allocation percentages every heartbeat",
+
+  "rules": {
+    "allocation": {
+      "options": 0.40,
+      "crypto": 0.30,
+      "cashReserve": 0.30
+    },
+    "options": {
+      "allowedStrategies": ["vertical_debit_spread"],
+      "maxPositions": 2,
+      "maxPerPositionPct": 15,
+      "profitTarget": { "startLooking": 0.40, "hardExit": 0.60 },
+      "stopLoss": 0.35,
+      "timeStopPct": 0.50
+    },
+    "crypto": {
+      "style": "swing",
+      "holdPeriod": "hours_to_days",
+      "maxPositions": 3,
+      "maxPerPositionPct": 10,
+      "profitTarget": { "min": 0.08, "target": 0.12, "stretch": 0.15 },
+      "stopLoss": 0.05,
+      "timeframes": ["1h", "4h", "1d"]
+    },
+    "rebalance": {
+      "frequency": "weekly",
+      "day": "sunday",
+      "driftThresholdPct": 5,
+      "method": "adjust_entries",
+      "forceCloseForRebalance": false
+    },
+    "crossAssetRisk": {
+      "bucketIsolation": true,
+      "independentPause": true
+    }
+  },
+
+  "exchanges": {
+    "options": {
+      "primary": "alpaca",
+      "config": {
+        "env": "paper",
+        "orderType": "limit"
+      }
+    },
+    "crypto": {
+      "primary": "coinbase",
+      "fallback": "binance",
+      "config": {
+        "coinbase": { "sandbox": true, "orderType": "limit" },
+        "binance": { "sandbox": true, "orderType": "limit" }
+      }
+    }
+  },
+
+  "symbols": {
+    "options": {
+      "primary": ["SPY", "QQQ"],
+      "secondary": ["AAPL", "AMD", "NVDA"]
+    },
+    "crypto": {
+      "primary": ["BTC/USDT", "ETH/USDT"],
+      "secondary": ["SOL/USDT"]
+    },
+    "note": "Options on liquid index ETFs, crypto on top-3 market cap. Conservative asset selection in both buckets."
+  }
+}

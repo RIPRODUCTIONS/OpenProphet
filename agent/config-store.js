@@ -16,6 +16,7 @@ const DEFAULT_HEARTBEAT = {
   market_close: 120,
   after_hours: 1800,
   closed: 3600,
+  weekend: 14400,
 };
 
 export const HEARTBEAT_PROFILES = {
@@ -520,6 +521,33 @@ export async function removeAccount(id) {
     _config.activeSandboxId = next ? `sbx_${next}` : null;
   }
   syncLegacyAliases(_config);
+  await saveConfig();
+}
+
+export async function addSandboxForAccount(accountId, { id: customId, name, activeAgentId, model, heartbeat, permissions } = {}) {
+  const account = _config.accounts.find(a => a.id === accountId);
+  if (!account) throw new Error(`Account ${accountId} not found`);
+  const sandboxId = customId || `sbx_${accountId}_${crypto.randomUUID().slice(0, 6)}`;
+  if (_config.sandboxes[sandboxId]) throw new Error(`Sandbox ${sandboxId} already exists`);
+  _config.sandboxes[sandboxId] = createSandbox(account, {
+    id: sandboxId,
+    name: name || `Sandbox ${sandboxId}`,
+    activeAgentId: activeAgentId || 'default',
+    activeModel: model || 'anthropic/claude-sonnet-4-6',
+    heartbeat: heartbeat || {},
+    permissions: permissions || {},
+  });
+  await saveConfig();
+  return _config.sandboxes[sandboxId];
+}
+
+export async function removeSandbox(sandboxId) {
+  if (!_config.sandboxes[sandboxId]) throw new Error(`Sandbox ${sandboxId} not found`);
+  delete _config.sandboxes[sandboxId];
+  if (_config.activeSandboxId === sandboxId) {
+    const next = Object.keys(_config.sandboxes)[0] || null;
+    _config.activeSandboxId = next;
+  }
   await saveConfig();
 }
 

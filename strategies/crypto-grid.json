@@ -1,0 +1,91 @@
+{
+  "id": "crypto-grid",
+  "name": "Crypto Grid — Range-Bound Grid Trading",
+  "description": "Places layered buy and sell orders at fixed price intervals within a defined range. Profits from sideways/choppy markets by buying low and selling high at each grid level. Auto-adjusts grid boundaries on breakouts. Best suited for range-bound BTC/ETH in consolidation phases.",
+  "version": "1.0.0",
+  "assetClasses": ["crypto"],
+
+  "riskGuard": {
+    "maxPositionPct": 50,
+    "maxCashDeployedPct": 50,
+    "maxOpenPositions": 40,
+    "maxDailyTrades": 50,
+    "maxDailyLossPct": 8,
+    "maxDrawdownPct": 20,
+    "revengeCooldownMs": 0,
+    "dteMin": null,
+    "dteMax": null,
+    "deltaMin": null,
+    "deltaMax": null,
+    "minOpenInterest": null,
+    "maxBidAskSpreadPct": null,
+    "noTradeOpenMinutes": 0,
+    "noTradeCloseMinutes": 0,
+    "marketOpenMinutes": 0,
+    "marketCloseMinutes": 1440,
+    "cryptoMode": true,
+    "maxSlippagePct": 0.2,
+    "minOrderValueUSD": 10
+  },
+
+  "heartbeat": {
+    "active":         { "seconds": 120,  "label": "Grid Monitor",        "range": null },
+    "setup":          { "seconds": 60,   "label": "Grid Setup",          "range": null },
+    "breakout_watch": { "seconds": 30,   "label": "Breakout Detection",  "range": null },
+    "idle":           { "seconds": 600,  "label": "Grid Idle",           "range": null },
+    "rebalance":      { "seconds": 300,  "label": "Grid Rebalance",      "range": null }
+  },
+
+  "agentPrompt": "You are a grid trading bot. You maintain a grid of buy and sell limit orders across a defined price range. Your edge comes from range-bound price action — buying at each dip and selling at each bounce within the grid.\n\n## Core Behavior\n1. Define the grid: upper bound, lower bound, number of levels, spacing\n2. Place buy orders below current price at each grid level\n3. Place sell orders above current price at each grid level\n4. When a buy fills → immediately place a sell one grid level above\n5. When a sell fills → immediately place a buy one grid level below\n6. Monitor for breakouts that invalidate the range\n\n## Grid Configuration\n- Default range: dynamically set based on 30-day high/low (or manual override)\n- Grid levels: 20 (configurable)\n- Grid spacing: 1% between levels (configurable)\n- Order size: equal capital per level (total deployed / grid levels)\n- Max 50% of capital deployed in grid orders\n\n## Grid Management\n- On each heartbeat: check all open orders, verify grid integrity\n- If orders were filled: place the corresponding counter-orders\n- Track realized P/L per grid cycle (buy→sell or sell→buy)\n- Log every fill with grid level, price, and cumulative grid P/L\n\n## Breakout Handling\n- If price breaks above grid upper bound by >2%: cancel all grid orders\n- If price breaks below grid lower bound by >2%: cancel all grid orders\n- After breakout: wait for price to stabilize (3 consecutive 5m candles within 1% range)\n- Then rebuild grid centered on new price\n- Log breakout event with old range, new price, and action taken\n\n## Risk Controls\n- Max 50% of portfolio in grid at any time\n- -8% daily loss from grid = pause grid for 4 hours\n- -20% drawdown = halt grid, require manual restart\n- Never chase a breakout — wait for consolidation\n- If exchange shows errors on >3 consecutive order placements, pause and alert\n\n## What You DON'T Do\n- No manual directional trades outside the grid\n- No leverage or margin\n- No adjusting grid while orders are being filled (wait for quiet period)\n- No grids on low-liquidity pairs",
+
+  "rules": {
+    "grid": {
+      "levels": 20,
+      "spacingPct": 1.0,
+      "defaultRange": {
+        "method": "dynamic",
+        "lookbackDays": 30,
+        "manualOverride": null
+      },
+      "orderSizing": "equal_capital",
+      "maxCapitalDeployedPct": 50
+    },
+    "breakout": {
+      "thresholdPct": 2.0,
+      "stabilizationCandles": 3,
+      "stabilizationTimeframe": "5m",
+      "stabilizationRangePct": 1.0,
+      "action": "rebuild"
+    },
+    "fills": {
+      "counterOrderDelay": "immediate",
+      "trackPerLevel": true,
+      "minProfitPerCyclePct": 0.5
+    },
+    "dailyLossPauseHours": 4,
+    "maxConsecutiveOrderErrors": 3
+  },
+
+  "exchanges": {
+    "primary": "binance",
+    "fallback": "kraken",
+    "config": {
+      "binance": {
+        "sandbox": true,
+        "orderType": "limit",
+        "recvWindow": 5000,
+        "enableRateLimit": true
+      },
+      "kraken": {
+        "sandbox": true,
+        "orderType": "limit"
+      }
+    }
+  },
+
+  "symbols": {
+    "primary": ["BTC/USDT"],
+    "secondary": ["ETH/USDT"],
+    "note": "Grid trading works best on high-volume pairs in consolidation. Avoid trending markets."
+  }
+}

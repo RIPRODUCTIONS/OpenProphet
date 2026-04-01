@@ -1,0 +1,20 @@
+services:
+  openprophet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openprophet-trader
+    restart: unless-stopped
+    ports:
+      - "3737:3737"
+      - "4534:4534"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./strategies:/app/strategies:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

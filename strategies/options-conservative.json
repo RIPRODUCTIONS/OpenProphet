@@ -1,0 +1,79 @@
+{
+  "id": "options-conservative",
+  "name": "Conservative Options — Defined Risk Spreads",
+  "description": "The foundational OpenProphet strategy. Trades vertical debit spreads on liquid underlyings with strict risk controls. Designed for micro-accounts ($100-$10K) where capital preservation is paramount. One position at a time, defined risk only, no naked exposure.",
+  "version": "1.0.0",
+  "assetClasses": ["options"],
+
+  "riskGuard": {
+    "accountSize": 100,
+    "maxPositionPct": 30,
+    "maxCashDeployedPct": 50,
+    "maxOpenPositions": 1,
+    "maxDailyTrades": 2,
+    "maxDailyLossPct": 10,
+    "maxDrawdownPct": 20,
+    "revengeCooldownMs": 86400000,
+    "dteMin": 14,
+    "dteMax": 45,
+    "deltaMin": 0.35,
+    "deltaMax": 0.55,
+    "minOpenInterest": 100,
+    "maxBidAskSpreadPct": 15,
+    "noTradeOpenMinutes": 15,
+    "noTradeCloseMinutes": 15,
+    "marketOpenMinutes": 570,
+    "marketCloseMinutes": 960
+  },
+
+  "heartbeat": {
+    "pre_market":   { "seconds": 900,   "label": "Pre-Market Scan",    "range": [240, 570]  },
+    "market_open":  { "seconds": 120,   "label": "Market Open Watch",  "range": [570, 585]  },
+    "active":       { "seconds": 600,   "label": "Active Trading",     "range": [585, 945]  },
+    "market_close": { "seconds": 300,   "label": "Market Close",       "range": [945, 960]  },
+    "after_hours":  { "seconds": 3600,  "label": "After Hours Review", "range": [960, 1200] },
+    "closed":       { "seconds": 3600,  "label": "Markets Closed",     "range": null },
+    "weekend":      { "seconds": 14400, "label": "Weekend Research",   "range": null }
+  },
+
+  "agentPrompt": "You are a conservative options trader. You ONLY trade defined-risk vertical debit spreads ($1-$5 wide) on liquid underlyings. Every trade has a known max loss before entry.\n\n## Position Rules\n- Maximum 1 open position at a time\n- Maximum 30% of account per trade\n- Maintain 50%+ cash at all times\n- Exception: second position allowed if first is >+30% with trailing stop set\n\n## Entry Criteria (require 2 of 3)\n1. RSI signal: oversold (<30) for calls, overbought (>70) for puts\n2. MACD crossover aligned with direction\n3. Price action: support bounce (calls) or resistance rejection (puts)\n\n## Options Selection\n- DTE: 14-45 days (sweet spot 21-30)\n- Delta: 0.35-0.55 for long leg\n- Bid-ask spread <15% of mid price\n- Open interest >100 on both legs\n- LIMIT ORDERS ONLY — never market orders\n\n## Exit Rules\n- Take profit: +40% begin looking, +50% strong close, +60% hard exit\n- Stop loss: -35% of debit paid, close immediately\n- Time stop: close at 50% of DTE elapsed if no movement\n- Close losing positions before weekends\n\n## Banned\n- No naked calls/puts, no credit spreads, no iron condors\n- No 0DTE options, no scalping\n- No trading first/last 15 minutes of session\n- No revenge trading — 24h cooldown after any loss",
+
+  "rules": {
+    "allowedStrategies": ["vertical_debit_spread"],
+    "allowedDirections": ["bull_call_spread", "bear_put_spread"],
+    "spreadWidth": { "min": 1, "max": 5 },
+    "profitTarget": { "startLooking": 0.40, "strongClose": 0.50, "hardExit": 0.60 },
+    "stopLoss": 0.35,
+    "timeStopPct": 0.50,
+    "technicalConfirmations": {
+      "required": 2,
+      "signals": ["rsi", "macd", "price_action"]
+    },
+    "rsiThresholds": { "oversold": 30, "overbought": 70 },
+    "closeLosingBeforeWeekend": true,
+    "paperModeDefault": true,
+    "graduationCriteria": {
+      "minTrades": 30,
+      "minProfitFactor": 1.2,
+      "minWinRate": 0.40,
+      "maxDrawdown": 0.20
+    }
+  },
+
+  "exchanges": {
+    "primary": "alpaca",
+    "config": {
+      "alpaca": {
+        "env": "paper",
+        "orderType": "limit"
+      }
+    }
+  },
+
+  "symbols": {
+    "primary": ["SPY", "QQQ"],
+    "secondary": ["AAPL", "AMD", "NVDA"],
+    "cheapOptions": ["SOFI", "PLTR", "F", "BAC"],
+    "note": "Stick to liquid underlyings with tight spreads and high open interest"
+  }
+}

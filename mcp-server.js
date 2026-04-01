@@ -11,6 +11,128 @@ import axios from 'axios';
 import fs from 'fs/promises';
 import path from 'path';
 import { storeTrade, findSimilarTrades, getTradeStats, getEmbeddingCount } from './vectorDB.js';
+import { createGuard } from './risk-guard.js';
+import { createCryptoService } from './crypto-service.js';
+import { loadCryptoConfig } from './crypto-config.js';
+import { getCryptoToolDefinitions, handleCryptoToolCall, isCryptoTool } from './crypto-tools.js';
+import { getRiskGuardOverrides } from './strategies/index.js';
+import { createAlertService, getAlertToolDefinition } from './alerts.js';
+import { validateEnv } from './env-check.js';
+import { analyzePortfolioRisk, getCorrelationToolDefinition, handleCorrelationToolCall } from './correlation-guard.js';
+import { getPositionSizingToolDefinition, handlePositionSizingToolCall } from './position-sizing.js';
+import { getVolAnalysisToolDefinition, handleVolAnalysisToolCall } from './vol-analysis.js';
+import { createExecutionTracker, getExecutionToolDefinitions, handleExecutionToolCall } from './execution-tracker.js';
+import { getPerformanceToolDefinition, handlePerformanceToolCall } from './perf-analytics.js';
+import { getRegimeToolDefinition, handleRegimeToolCall } from './regime-detector.js';
+
+// Validate environment before anything else
+validateEnv({ fatal: false }); // warn but don't kill — allows dev mode without all keys
+
+// Initialize Risk Guard — start with conservative defaults, then apply active strategy overrides
+const DEFAULT_GUARD_CONFIG = {
+  accountSize: 100000,
+  maxPositionPct: 30,
+  maxCashDeployedPct: 50,
+  maxOpenPositions: 1,
+  maxDailyTrades: 2,
+  maxDailyLossPct: 10,
+  maxDrawdownPct: 20,
+  revengeCooldownMs: 24 * 60 * 60 * 1000,
+  dteMin: 14,
+  dteMax: 45,
+  deltaMin: 0.35,
+  deltaMax: 0.55,
+  minOpenInterest: 100,
+  maxBidAskSpreadPct: 15,
+};
+
+// Apply strategy overrides if STRATEGY_ID is set
+const activeStrategyId = process.env.STRATEGY_ID || '';
+let guardConfig = { ...DEFAULT_GUARD_CONFIG };
+if (activeStrategyId) {
+  try {
+    const overrides = await getRiskGuardOverrides(activeStrategyId);
+    if (overrides) {
+      // Filter out null values (crypto strategies set stock-specific params to null)
+      const cleaned = Object.fromEntries(Object.entries(overrides).filter(([, v]) => v != null));
+      guardConfig = { ...guardConfig, ...cleaned };
+      console.error(`RiskGuard: applied strategy "${activeStrategyId}" overrides:`, cleaned);
+    }
+  } catch (e) {
+    console.error(`RiskGuard: failed to load strategy "${activeStrategyId}":`, e.message);
+  }
+}
+const riskGuard = createGuard(guardConfig, process.env.OPENPROPHET_ACCOUNT_ID || 'default');
+
+// Initialize Crypto Service (only if exchange keys configured)
+let cryptoService = null;
+try {
+  const cryptoConfig = loadCryptoConfig();
+  if (Object.keys(cryptoConfig.exchanges || {}).length > 0) {
+    cryptoService = createCryptoService(cryptoConfig);
+    console.error('CryptoService initialized with exchanges:', Object.keys(cryptoConfig.exchanges).join(', '));
+  }
+} catch (e) {
+  console.error('CryptoService not available:', e.message);
+}
+
+// Initialize Alert Service
+const alerts = createAlertService();
+
+// Initialize Execution Tracker
+const executionTracker = createExecutionTracker();
+
+// ── Circuit Breaker ─────────────────────────────────────────────────
+// Trips after N consecutive MCP tool errors → blocks further calls until reset.
+const circuitBreaker = {
+  consecutiveErrors: 0,
+  threshold: parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD || '8', 10),
+  cooldownMs: parseInt(process.env.CIRCUIT_BREAKER_COOLDOWN_MS || '300000', 10), // 5 min default
+  trippedAt: null,
+  totalTrips: 0,
+
+  recordSuccess() {
+    this.consecutiveErrors = 0;
+  },
+
+  recordError(toolName, errorMsg) {
+    this.consecutiveErrors++;
+    if (this.consecutiveErrors >= this.threshold && !this.trippedAt) {
+      this.trippedAt = Date.now();
+      this.totalTrips++;
+      console.error(`[CircuitBreaker] TRIPPED after ${this.consecutiveErrors} consecutive errors. Last: ${toolName} → ${errorMsg}. Cooldown ${this.cooldownMs / 1000}s.`);
+      try { alerts.send('circuit_breaker', { consecutiveErrors: this.consecutiveErrors, lastTool: toolName, lastError: errorMsg }); } catch {}
+    }
+  },
+
+  isOpen() {
+    if (!this.trippedAt) return false;
+    if (Date.now() - this.trippedAt >= this.cooldownMs) {
+      // Auto-reset after cooldown (half-open → next success closes, next failure re-trips)
+      console.error(`[CircuitBreaker] Cooldown expired, resetting. Allowing calls.`);
+      this.trippedAt = null;
+      this.consecutiveErrors = Math.floor(this.threshold / 2); // half-open: one more error re-trips
+      return false;
+    }
+    return true;
+  },
+
+  reset() {
+    this.consecutiveErrors = 0;
+    this.trippedAt = null;
+  },
+
+  getStatus() {
+    return {
+      state: this.trippedAt ? 'OPEN' : this.consecutiveErrors > 0 ? 'HALF_OPEN' : 'CLOSED',
+      consecutiveErrors: this.consecutiveErrors,
+      threshold: this.threshold,
+      trippedAt: this.trippedAt ? new Date(this.trippedAt).toISOString() : null,
+      cooldownMs: this.cooldownMs,
+      totalTrips: this.totalTrips,
+    };
+  },
+};
 
 // Configuration
 const TRADING_BOT_URL = process.env.TRADING_BOT_URL || 'http://localhost:4534';
@@ -1047,6 +1169,33 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['agentId'],
         },
       },
+      // ── Crypto Trading Tools (auto-registered from crypto-tools.js) ──
+      ...(cryptoService ? getCryptoToolDefinitions() : []),
+      // ── Risk Guard Status Tool ──
+      {
+        name: 'get_risk_guard_status',
+        description: 'Get current risk guard status: daily trade count, P&L, cooldowns, halt state. Use this to check if trading is allowed before placing orders.',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      // ── Alert Tool ──
+      getAlertToolDefinition(),
+      // ── Portfolio Intelligence Tools ──
+      getCorrelationToolDefinition(),
+      getPositionSizingToolDefinition(),
+      getVolAnalysisToolDefinition(),
+      ...getExecutionToolDefinitions(),
+      getPerformanceToolDefinition(),
+      getRegimeToolDefinition(),
+      {
+        name: 'get_circuit_breaker_status',
+        description: 'Check circuit breaker state (CLOSED/HALF_OPEN/OPEN), consecutive error count, and trip history.',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'reset_circuit_breaker',
+        description: 'Force-reset the circuit breaker after it trips. Re-enables all tool calls.',
+        inputSchema: { type: 'object', properties: {} },
+      },
     ],
   };
 });
@@ -1058,7 +1207,7 @@ const AGENT_QUERY = { sandboxId: OPENPROPHET_SANDBOX_ID };
 const agentAxios = axios.create({
   headers: AGENT_AUTH_TOKEN ? { Authorization: `Bearer ${AGENT_AUTH_TOKEN}` } : {},
 });
-const ORDER_TOOLS = ['place_buy_order', 'place_sell_order', 'place_options_order', 'place_managed_position', 'close_managed_position'];
+const ORDER_TOOLS = ['place_buy_order', 'place_sell_order', 'place_options_order', 'place_managed_position', 'close_managed_position', 'place_crypto_order', 'cancel_crypto_order'];
 
 async function enforcePermissions(toolName, args) {
   let perms;
@@ -1125,9 +1274,155 @@ async function enforcePermissions(toolName, args) {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
+  // ── Circuit breaker gate ──
+  if (name === 'get_circuit_breaker_status') {
+    return { content: [{ type: 'text', text: JSON.stringify(circuitBreaker.getStatus(), null, 2) }] };
+  }
+  if (name === 'reset_circuit_breaker') {
+    circuitBreaker.reset();
+    return { content: [{ type: 'text', text: 'Circuit breaker reset. All tools re-enabled.' }] };
+  }
+  if (circuitBreaker.isOpen()) {
+    const st = circuitBreaker.getStatus();
+    return {
+      content: [{ type: 'text', text: `[CircuitBreaker] OPEN — ${st.consecutiveErrors} consecutive errors. Tools blocked until ${st.trippedAt ? new Date(Date.parse(st.trippedAt) + st.cooldownMs).toISOString() : 'reset'}. Use reset_circuit_breaker to force-reset.` }],
+      isError: true,
+    };
+  }
+
   try {
     // Enforce permissions before executing any tool
     await enforcePermissions(name, args);
+
+    // ── All tool handlers below return directly — we wrap with circuit breaker ──
+    const result = await (async () => {
+
+    // ── Fetch account state for order validation (shared by stock + crypto) ──
+    let _accountState = null;
+    let _positions = null;
+    if (ORDER_TOOLS.includes(name) && name !== 'close_managed_position') {
+      // CRITICAL: If backend is unreachable, BLOCK the order. Never trade blind.
+      try {
+        const acctData = await callTradingBot('/account');
+        const posData = await callTradingBot('/positions');
+        _positions = Array.isArray(posData) ? posData : [];
+
+        // Validate that we got real data — reject if fields look like defaults or are missing
+        const equity = parseFloat(acctData.equity || acctData.portfolio_value || 0);
+        const cash = parseFloat(acctData.cash || 0);
+        const dailyPL = parseFloat(acctData.daily_profit_loss ?? NaN);
+
+        if (!equity || equity <= 0) {
+          throw new Error('Account equity is 0 or missing — backend may be returning stale data');
+        }
+        if (Number.isNaN(dailyPL)) {
+          console.error('[RiskGuard] WARNING: daily_profit_loss not available from backend, using 0');
+        }
+
+        _accountState = {
+          equity,
+          cash,
+          buyingPower: parseFloat(acctData.buying_power || 0),
+          openPositions: _positions.length,
+          dailyPL: Number.isNaN(dailyPL) ? 0 : dailyPL,
+          positions: _positions,
+        };
+      } catch (e) {
+        // If this is already a validation error from above, re-throw
+        if (e.message.includes('equity') || e.message.includes('stale')) throw new Error(`[RiskGuard] BLOCKED: ${e.message}`);
+        // Backend down — HARD BLOCK all orders
+        throw new Error(`[RiskGuard] BLOCKED: Cannot place orders — trading backend unreachable: ${e.message}`);
+      }
+
+      // Run risk guard validation on ALL order types (stocks, options, AND crypto)
+      const guardResult = await riskGuard.validateOrder(args, _accountState);
+      if (!guardResult.allowed) {
+        if (['daily_loss_limit', 'drawdown_limit', 'hard_halt'].includes(guardResult.rule)) {
+          alerts.dailyLossTriggered({ dailyPL: _accountState.dailyPL, limit: riskGuard.getStatus().config.maxDailyLossPct, rule: guardResult.rule }).catch(() => {});
+        }
+        throw new Error(`[RiskGuard] ${guardResult.rule}: ${guardResult.reason}`);
+      }
+    }
+
+    // ── Crypto tool dispatch (AFTER risk guard) ──
+    if (cryptoService && isCryptoTool(name)) {
+      const result = await handleCryptoToolCall(name, args, cryptoService);
+      if (name === 'place_crypto_order' && !result.isError) {
+        try {
+          const side = (args.side || '').toLowerCase();
+          // Calculate real P&L for sells by looking up entry from positions
+          let pnl = undefined;
+          if (side === 'sell' && _positions) {
+            const pos = _positions.find(p =>
+              (p.symbol || '').toUpperCase() === (args.symbol || '').toUpperCase().replace('/', '')
+            );
+            if (pos && pos.avg_entry_price) {
+              const entryPrice = parseFloat(pos.avg_entry_price);
+              const exitPrice = parseFloat(args.price || 0);
+              const qty = parseFloat(args.amount || 0);
+              if (entryPrice > 0 && exitPrice > 0 && qty > 0) {
+                pnl = (exitPrice - entryPrice) * qty;
+              }
+            }
+          }
+          riskGuard.recordTrade({
+            symbol: args.symbol, side, qty: args.amount,
+            price: args.price || 0, pnl,
+          });
+          alerts.tradeExecuted({ symbol: args.symbol, side, qty: args.amount, price: args.price, type: 'crypto' }).catch(() => {});
+        } catch (e) { console.error('RiskGuard recordTrade error:', e.message); }
+      }
+      return result;
+    }
+
+    // ── Risk Guard status tool ──
+    if (name === 'get_risk_guard_status') {
+      return { content: [{ type: 'text', text: JSON.stringify(riskGuard.getStatus(), null, 2) }] };
+    }
+
+    // ── Send Alert tool ──
+    if (name === 'send_alert') {
+      await alerts.custom(args.message, args.severity || 'info');
+      return { content: [{ type: 'text', text: 'Alert sent.' }] };
+    }
+
+    // ── Portfolio Intelligence tools ──
+    if (name === 'analyze_portfolio_correlation') {
+      const positions = _positions || (await callTradingBot('/positions').catch(() => []));
+      const acct = _accountState || { equity: 100000 };
+      return handleCorrelationToolCall(args, positions, acct.equity);
+    }
+
+    if (name === 'calculate_position_size') {
+      const acct = _accountState || await callTradingBot('/account').catch(() => ({}));
+      const equity = parseFloat(acct.equity || acct.portfolio_value || 100000);
+      const positions = _positions || (await callTradingBot('/positions').catch(() => []));
+      const posValue = positions.reduce((s, p) => s + Math.abs(parseFloat(p.market_value || 0)), 0);
+      const exposurePct = equity > 0 ? (posValue / equity) * 100 : 0;
+      return handlePositionSizingToolCall(args, equity, exposurePct, riskGuard.config.maxPositionPct);
+    }
+
+    if (name === 'analyze_volatility') {
+      return handleVolAnalysisToolCall(args);
+    }
+
+    if (name === 'get_execution_stats' || name === 'record_execution') {
+      return handleExecutionToolCall(name, args, executionTracker);
+    }
+
+    if (name === 'get_performance_report') {
+      // Pull trade data from vectorDB for analytics
+      let trades = [];
+      try {
+        const stats = await getTradeStats();
+        trades = stats.trades || stats.recentTrades || [];
+      } catch { /* no trades yet */ }
+      return handlePerformanceToolCall(args, trades, riskGuard.config.accountSize);
+    }
+
+    if (name === 'detect_market_regime') {
+      return handleRegimeToolCall(args);
+    }
 
     switch (name) {
       case 'get_account': {
@@ -1175,6 +1470,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ...(args.limit_price && { limit_price: args.limit_price })
         };
         const data = await callTradingBot('/orders/buy', 'POST', requestData);
+        try { riskGuard.recordTrade({ symbol: args.symbol, side: 'buy', qty: args.quantity, price: args.limit_price || 0 }); alerts.tradeExecuted({ symbol: args.symbol, side: 'buy', qty: args.quantity, price: args.limit_price, type: args.order_type }).catch(() => {}); } catch {}
         return {
           content: [
             {
@@ -1194,6 +1490,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ...(args.limit_price && { limit_price: args.limit_price })
         };
         const data = await callTradingBot('/orders/sell', 'POST', requestData);
+        try {
+          // Calculate real P&L from position entry price
+          let pnl = undefined;
+          if (_positions) {
+            const pos = _positions.find(p => (p.symbol || '').toUpperCase() === (args.symbol || '').toUpperCase());
+            if (pos && pos.avg_entry_price) {
+              const entry = parseFloat(pos.avg_entry_price);
+              const exit = parseFloat(args.limit_price || pos.current_price || 0);
+              const qty = parseFloat(args.quantity || 0);
+              if (entry > 0 && exit > 0 && qty > 0) pnl = (exit - entry) * qty;
+            }
+          }
+          riskGuard.recordTrade({ symbol: args.symbol, side: 'sell', qty: args.quantity, price: args.limit_price || 0, pnl });
+          alerts.tradeExecuted({ symbol: args.symbol, side: 'sell', qty: args.quantity, price: args.limit_price, type: args.order_type, pnl }).catch(() => {});
+        } catch {}
         return {
           content: [
             {
@@ -1206,6 +1517,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'place_managed_position': {
         const data = await callTradingBot('/positions/managed', 'POST', args);
+        try { riskGuard.recordTrade({ symbol: args.symbol, side: args.side || 'buy', qty: args.quantity || args.qty, price: args.entry_price || args.limit_price || 0 }); alerts.tradeExecuted({ symbol: args.symbol, side: args.side || 'buy', qty: args.quantity || args.qty, price: args.entry_price || args.limit_price, type: 'managed' }).catch(() => {}); } catch {}
         return {
           content: [
             {
@@ -1719,6 +2031,21 @@ ${allNews.map((article, i) =>
           ...(args.limit_price && { limit_price: args.limit_price })
         };
         const data = await callTradingBot('/options/order', 'POST', requestData);
+        try {
+          let pnl = undefined;
+          const side = (args.side || '').toLowerCase();
+          if (side === 'sell' && _positions) {
+            const pos = _positions.find(p => (p.symbol || '').toUpperCase() === (args.symbol || '').toUpperCase());
+            if (pos && pos.avg_entry_price) {
+              const entry = parseFloat(pos.avg_entry_price);
+              const exit = parseFloat(args.limit_price || 0);
+              const qty = parseFloat(args.quantity || 0);
+              if (entry > 0 && exit > 0 && qty > 0) pnl = (exit - entry) * qty * 100; // options = 100 shares/contract
+            }
+          }
+          riskGuard.recordTrade({ symbol: args.symbol, side: side || 'buy', qty: args.quantity, price: args.limit_price || 0, pnl });
+          alerts.tradeExecuted({ symbol: args.symbol, side: side || 'buy', qty: args.quantity, price: args.limit_price, type: 'options', pnl }).catch(() => {});
+        } catch {}
         return {
           content: [
             {
@@ -2205,7 +2532,14 @@ Worst Trade: ${stats.worst_result_pct.toFixed(1)}% ($${stats.worst_result_dollar
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
+
+    })(); // end circuit-breaker wrapper IIFE
+
+    // Tool succeeded — reset circuit breaker
+    circuitBreaker.recordSuccess();
+    return result;
   } catch (error) {
+    circuitBreaker.recordError(name, error.message);
     return {
       content: [
         {
@@ -2224,6 +2558,32 @@ async function main() {
   await server.connect(transport);
   console.error('OpenProphet MCP Server running on stdio');
 }
+
+// Graceful shutdown — persist state and flush queues
+async function shutdown(signal) {
+  console.error(`[shutdown] Received ${signal}, cleaning up...`);
+  try {
+    // Persist risk guard state
+    riskGuard._saveState();
+    console.error('[shutdown] Risk guard state saved.');
+  } catch (e) {
+    console.error('[shutdown] Failed to save risk guard state:', e.message);
+  }
+  try {
+    // Flush alert queue
+    if (alerts && typeof alerts.flush === 'function') {
+      await alerts.flush();
+      console.error('[shutdown] Alert queue flushed.');
+    }
+  } catch (e) {
+    console.error('[shutdown] Failed to flush alerts:', e.message);
+  }
+  console.error('[shutdown] Goodbye.');
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 main().catch((error) => {
   console.error('Fatal error:', error);
