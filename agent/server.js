@@ -18,8 +18,10 @@ import createStrategyRoutes from './routes/strategy.js';
 import createHealthRoutes from './routes/health.js';
 import createPortfolioRoutes from './routes/portfolio.js';
 import createWalletRoutes from './routes/wallet.js';
+import createSignalsRoutes from './routes/signals.js';
 import { getActiveAccount, getSandboxes } from './config-store.js';
 import { createWalletSystem } from '../wallet/index.js';
+import { startSovereignReporter, stopSovereignReporter } from './sovereign-reporter.js';
 
 // ── CLI Flags ──────────────────────────────────────────────────────
 const { values: cliFlags } = parseArgs({
@@ -39,7 +41,10 @@ const ctx = await createAppContext();
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
-// Auth middleware on all API routes
+// Signal routes mounted BEFORE global auth (has own X-Signal-Key auth)
+app.use('/api/signals', createSignalsRoutes(ctx));
+
+// Auth middleware on all other API routes
 app.use('/api', authMiddleware);
 
 // Mount route modules
@@ -89,6 +94,7 @@ if (activeAccount) {
 // ── Graceful shutdown ──────────────────────────────────────────────
 async function shutdown() {
   console.log('\n  Shutting down...');
+  stopSovereignReporter();
   await ctx.harness.stop();
   await ctx.orchestrator.shutdown();
   await ctx.stopGoBackend();
@@ -103,6 +109,9 @@ app.listen(ctx.PORT, '0.0.0.0', async () => {
   console.log(`  Network:                http://0.0.0.0:${ctx.PORT}`);
   console.log(`  Trading Bot Backend:    ${ctx.TRADING_BOT_URL}`);
   console.log(`  Active Account:         ${activeAccount?.name || 'none'}\n`);
+
+  // Start Sovereign status reporting
+  startSovereignReporter(ctx);
 
   // Auto-start sandboxes that have autoStart enabled
   const allSandboxes = getSandboxes();
