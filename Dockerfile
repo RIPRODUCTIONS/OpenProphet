@@ -74,4 +74,4 @@ EXPOSE 3737 4534
 # Health check disabled — node agent manages Go backend internally
 # Use docker exec or external monitoring instead
 
-CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+CMD ["node", "agent/server.js"]
