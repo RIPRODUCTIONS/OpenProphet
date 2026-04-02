@@ -89,6 +89,17 @@
             "n_estimators": 800
         }
     },
+    "api_server": {
+        "enabled": true,
+        "listen_ip_address": "127.0.0.1",
+        "listen_port": 8080,
+        "verbosity": "error",
+        "enable_openapi": true,
+        "jwt_secret_key": "prophet-freqtrade-local-dev",
+        "CORS_origins": ["http://localhost:3737"],
+        "username": "prophet",
+        "password": "prophet"
+    },
     "bot_name": "OpenProphet-Freqtrade",
     "initial_state": "running",
     "force_entry_enable": false,
