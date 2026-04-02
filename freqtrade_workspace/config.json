@@ -44,7 +44,11 @@
             "LINK/USDT",
             "DOT/USDT"
         ],
-        "pair_blacklist": []
+        "pair_blacklist": [],
+        "fees": {
+            "maker": 0.001,
+            "taker": 0.002
+        }
     },
     "pairlists": [
         {

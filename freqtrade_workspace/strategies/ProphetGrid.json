@@ -1,0 +1,34 @@
+{
+  "strategy_name": "ProphetGrid",
+  "params": {
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "adx_threshold": 16,
+      "bb_period": 22,
+      "bb_std": 1.9,
+      "rsi_buy": 20
+    },
+    "sell": {
+      "rsi_sell": 73
+    },
+    "roi": {
+      "0": 0.298,
+      "112": 0.068,
+      "253": 0.048,
+      "416": 0
+    },
+    "stoploss": {
+      "stoploss": -0.278
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.03,
+      "trailing_stop_positive_offset": 0.041,
+      "trailing_only_offset_is_reached": true
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-04-02 02:30:18.298510+00:00"
+}

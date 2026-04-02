@@ -14,24 +14,24 @@ class ProphetGrid(IStrategy):
     INTERFACE_VERSION = 3
     timeframe = "15m"
 
-    # Conservative ROI for grid-style exits
-    minimal_roi = {"0": 0.02, "60": 0.015, "120": 0.01, "240": 0.005}
-    stoploss = -0.03
+    # Hyperopt-optimized ROI (500 epochs, 0.2% fee, Sharpe loss)
+    minimal_roi = {"0": 0.298, "112": 0.068, "253": 0.048, "416": 0}
+    stoploss = -0.278
     trailing_stop = True
-    trailing_stop_positive = 0.005
-    trailing_stop_positive_offset = 0.01
+    trailing_stop_positive = 0.03
+    trailing_stop_positive_offset = 0.041
     trailing_only_offset_is_reached = True
 
     # Allow multiple entries to simulate grid levels
     position_adjustment_enable = True
     max_entry_position_adjustment = 3
 
-    # Parameters
-    bb_period = IntParameter(15, 30, default=20, space="buy")
-    bb_std = DecimalParameter(1.5, 2.5, default=2.0, decimals=1, space="buy")
-    rsi_buy = IntParameter(20, 40, default=35, space="buy")
-    rsi_sell = IntParameter(60, 80, default=65, space="sell")
-    adx_threshold = IntParameter(15, 30, default=25, space="buy")
+    # Hyperopt-optimized params (500 epochs, Sharpe loss)
+    bb_period = IntParameter(15, 30, default=22, space="buy")
+    bb_std = DecimalParameter(1.5, 2.5, default=1.9, decimals=1, space="buy")
+    rsi_buy = IntParameter(20, 40, default=20, space="buy")
+    rsi_sell = IntParameter(60, 80, default=73, space="sell")
+    adx_threshold = IntParameter(15, 30, default=16, space="buy")
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         # Bollinger Bands
