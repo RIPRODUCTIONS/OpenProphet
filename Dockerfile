@@ -48,7 +48,7 @@ WORKDIR /app
 
 # Install Node dependencies (layer cache — only rebuilds on package changes)
 COPY package.json package-lock.json ./
-RUN npm ci --production \
+RUN npm install --omit=dev \
     && apk del python3 make g++
 
 # Copy Go binary from builder stage
