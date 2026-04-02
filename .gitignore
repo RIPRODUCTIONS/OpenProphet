@@ -43,3 +43,4 @@ news_summaries/*.json
 quickstart.shlogs/
 ecosystem.config.cjs
 config/secrets.encrypted
+tradesv3.dryrun.sqlite*

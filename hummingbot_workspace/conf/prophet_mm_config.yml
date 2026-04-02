@@ -1,0 +1,47 @@
+######################################
+## ProphetMM Configuration
+######################################
+
+template_version: 2
+
+strategy: pure_market_making
+
+exchange: coinbase_pro
+market: BTC-USDT
+bid_spread: 0.2
+ask_spread: 0.2
+order_amount: 0.001
+price_ceiling: -1
+price_floor: -1
+
+# Order refresh
+order_refresh_time: 30.0
+order_refresh_tolerance_pct: 0.1
+max_order_age: 120.0
+
+# Inventory skew
+inventory_skew_enabled: true
+inventory_target_base_pct: 50.0
+inventory_range_multiplier: 2.0
+
+# Risk management  
+filled_order_delay: 60.0
+hanging_orders_enabled: false
+hanging_orders_cancel_pct: 10.0
+
+# Minimum spread
+minimum_spread: 0.3
+
+# Order levels
+order_levels: 1
+order_level_amount: 0.001
+order_level_spread: 0.1
+
+# Other
+order_optimization_enabled: true
+ask_order_optimization_depth: 0.01
+bid_order_optimization_depth: 0.01
+
+# Kill switch
+kill_switch_enabled: true
+kill_switch_rate: -20.0

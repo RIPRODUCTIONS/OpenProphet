@@ -89,6 +89,33 @@
             "n_estimators": 800
         }
     },
+    "telegram": {
+        "enabled": false,
+        "token": "",
+        "chat_id": "",
+        "notification_settings": {
+            "status": "on",
+            "warning": "on",
+            "startup": "on",
+            "entry": "on",
+            "exit": {
+                "0": "on",
+                "1": "on",
+                "2": "on",
+                "3": "off"
+            },
+            "entry_cancel": "on",
+            "exit_cancel": "on",
+            "entry_fill": "off",
+            "exit_fill": "off",
+            "protection_trigger": "on",
+            "protection_trigger_global": "on",
+            "strategy_msg": "on",
+            "show_candle": "off"
+        },
+        "reload": true,
+        "balance_dust_level": 0.01
+    },
     "api_server": {
         "enabled": true,
         "listen_ip_address": "127.0.0.1",

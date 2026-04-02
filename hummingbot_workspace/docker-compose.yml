@@ -1,0 +1,23 @@
+version: "3.9"
+services:
+  hummingbot:
+    image: hummingbot/hummingbot:latest
+    container_name: prophet-hummingbot
+    environment:
+      - CONFIG_PASSWORD=prophet
+    volumes:
+      - ./conf:/home/hummingbot/conf
+      - ./data:/home/hummingbot/data
+      - ./logs:/home/hummingbot/logs
+      - ./scripts:/home/hummingbot/scripts
+      - ./certs:/home/hummingbot/certs
+    ports:
+      - "15888:15888"  # Hummingbot gateway
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
