@@ -59,6 +59,7 @@ RUN chmod +x /app/prophet_bot
 COPY mcp-server.js risk-guard.js crypto-config.js crypto-service.js crypto-tools.js ./
 COPY alerts.js env-check.js vectorDB.js backfill_embeddings.js ./
 COPY agent/ ./agent/
+COPY wallet/ ./wallet/
 COPY strategies/ ./strategies/
 COPY seed_data/ ./seed_data/
 
