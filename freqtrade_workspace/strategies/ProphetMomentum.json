@@ -1,0 +1,35 @@
+{
+  "strategy_name": "ProphetMomentum",
+  "params": {
+    "roi": {
+      "0": 0.241,
+      "117": 0.064,
+      "291": 0.048,
+      "615": 0
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "atr_multiplier": 2.1,
+      "ema_fast": 8,
+      "ema_slow": 28,
+      "rsi_buy": 31,
+      "volume_factor": 1.8
+    },
+    "sell": {
+      "rsi_sell": 85
+    },
+    "stoploss": {
+      "stoploss": -0.28
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.013,
+      "trailing_stop_positive_offset": 0.05,
+      "trailing_only_offset_is_reached": true
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-04-02 02:55:00.985495+00:00"
+}

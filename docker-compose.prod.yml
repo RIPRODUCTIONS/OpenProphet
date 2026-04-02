@@ -1,0 +1,60 @@
+services:
+  openprophet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openprophet-trader
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3737:3737"
+      - "127.0.0.1:4534:4534"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./strategies:/app/strategies:ro
+      - prophet-logs:/app/logs
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3737/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  freqtrade:
+    image: freqtradeorg/freqtrade:stable
+    container_name: openprophet-freqtrade
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./freqtrade_workspace:/freqtrade/config:ro
+      - ./user_data:/freqtrade/user_data
+      - freqtrade-db:/freqtrade/db
+    command: >
+      trade
+      --userdir /freqtrade/user_data
+      -c /freqtrade/config/config.json
+      --strategy ProphetMomentum
+      --strategy-path /freqtrade/config/strategies
+      --db-url sqlite:////freqtrade/db/tradesv3.dryrun.sqlite
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/v1/ping"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  prophet-logs:
+  freqtrade-db:
