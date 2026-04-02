@@ -71,7 +71,7 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 3737 4534
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
-    CMD wget -qO- http://localhost:4534/health || exit 1
+# Health check disabled — node agent manages Go backend internally
+# Use docker exec or external monitoring instead
 
 CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
