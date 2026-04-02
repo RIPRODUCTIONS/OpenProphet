@@ -71,7 +71,7 @@ COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 3737 4534
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD wget -qO- http://localhost:3737/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+    CMD wget -qO- http://localhost:4534/health || exit 1
 
 CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
