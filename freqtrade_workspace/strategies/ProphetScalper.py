@@ -26,11 +26,11 @@ class ProphetScalper(IStrategy):
     max_entry_position_adjustment = 0
 
     # Hyperoptable parameters
-    buy_rsi = IntParameter(20, 40, default=30, space="buy")
-    buy_ema_short = IntParameter(5, 15, default=8, space="buy")
-    buy_ema_long = IntParameter(15, 30, default=21, space="buy")
-    sell_rsi = IntParameter(65, 85, default=70, space="sell")
-    volume_factor = DecimalParameter(1.5, 3.0, default=2.0, decimals=1, space="buy")
+    buy_rsi = IntParameter(20, 50, default=44, space="buy")
+    buy_ema_short = IntParameter(5, 15, default=10, space="buy")
+    buy_ema_long = IntParameter(15, 30, default=25, space="buy")
+    sell_rsi = IntParameter(55, 85, default=61, space="sell")
+    volume_factor = DecimalParameter(1.0, 3.0, default=2.0, decimals=1, space="buy")
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         # EMAs
@@ -50,7 +50,7 @@ class ProphetScalper(IStrategy):
         dataframe["macdsignal"] = macd["macdsignal"]
 
         # Bollinger Bands
-        bollinger = ta.BBANDS(dataframe, timeperiod=20, nbdevup=2, nbdevdn=2)
+        bollinger = ta.BBANDS(dataframe, timeperiod=20, nbdevup=2.0, nbdevdn=2.0)
         dataframe["bb_lower"] = bollinger["lowerband"]
         dataframe["bb_upper"] = bollinger["upperband"]
         dataframe["bb_mid"] = bollinger["middleband"]

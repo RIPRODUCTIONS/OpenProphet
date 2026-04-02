@@ -36,7 +36,7 @@ class ProphetGrid(IStrategy):
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         # Bollinger Bands
         bb = ta.BBANDS(dataframe, timeperiod=self.bb_period.value,
-                       nbdevup=self.bb_std.value, nbdevdn=self.bb_std.value)
+                       nbdevup=float(self.bb_std.value), nbdevdn=float(self.bb_std.value))
         dataframe["bb_lower"] = bb["lowerband"]
         dataframe["bb_upper"] = bb["upperband"]
         dataframe["bb_mid"] = bb["middleband"]

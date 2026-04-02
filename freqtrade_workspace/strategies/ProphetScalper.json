@@ -1,0 +1,34 @@
+{
+  "strategy_name": "ProphetScalper",
+  "params": {
+    "roi": {
+      "0": 0.03,
+      "30": 0.02,
+      "60": 0.01,
+      "120": 0
+    },
+    "stoploss": {
+      "stoploss": -0.02
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.01,
+      "trailing_stop_positive_offset": 0.015,
+      "trailing_only_offset_is_reached": true
+    },
+    "max_open_trades": {
+      "max_open_trades": 3
+    },
+    "buy": {
+      "buy_ema_long": 25,
+      "buy_ema_short": 10,
+      "buy_rsi": 44,
+      "volume_factor": 2.0
+    },
+    "sell": {
+      "sell_rsi": 61
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-04-02 02:26:22.439710+00:00"
+}

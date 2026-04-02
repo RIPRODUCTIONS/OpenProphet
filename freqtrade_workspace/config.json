@@ -17,29 +17,34 @@
     },
     "entry_pricing": {
         "price_side": "same",
-        "use_order_book": true,
+        "use_order_book": false,
         "order_book_top": 1,
         "price_last_balance": 0.0,
-        "check_depth_of_market": { "enabled": false, "bids_to_ask_delta": 1 }
+        "check_depth_of_market": {
+            "enabled": false,
+            "bids_to_ask_delta": 1
+        }
     },
     "exit_pricing": {
         "price_side": "same",
-        "use_order_book": true,
+        "use_order_book": false,
         "order_book_top": 1
     },
     "exchange": {
-        "name": "binance",
+        "name": "coinbase",
         "key": "",
         "secret": "",
         "ccxt_config": {},
         "ccxt_async_config": {},
         "pair_whitelist": [
-            "BTC/USDT", "ETH/USDT", "SOL/USDT", "AVAX/USDT",
-            "LINK/USDT", "DOT/USDT", "MATIC/USDT", "NEAR/USDT"
+            "BTC/USDT",
+            "ETH/USDT",
+            "SOL/USDT",
+            "AVAX/USDT",
+            "LINK/USDT",
+            "DOT/USDT"
         ],
-        "pair_blacklist": [
-            "BNB/.*"
-        ]
+        "pair_blacklist": []
     },
     "pairlists": [
         {
@@ -53,13 +58,24 @@
         "backtest_period_days": 7,
         "identifier": "prophet_freqai",
         "feature_parameters": {
-            "include_timeframes": ["5m", "15m", "1h"],
-            "include_corr_pairlist": ["BTC/USDT", "ETH/USDT"],
+            "include_timeframes": [
+                "5m",
+                "15m",
+                "1h"
+            ],
+            "include_corr_pairlist": [
+                "BTC/USDT",
+                "ETH/USDT"
+            ],
             "label_period_candles": 24,
             "include_shifted_candles": 2,
             "DI_threshold": 0.9,
             "weight_factor": 0.9,
-            "indicator_periods_candles": [10, 20, 50]
+            "indicator_periods_candles": [
+                10,
+                20,
+                50
+            ]
         },
         "data_split_parameters": {
             "test_size": 0.33,
