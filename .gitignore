@@ -43,4 +43,11 @@ news_summaries/*.json
 quickstart.shlogs/
 ecosystem.config.cjs
 config/secrets.encrypted
+
+# Freqtrade runtime
 tradesv3.dryrun.sqlite*
+tradesv3.sqlite*
+__pycache__/
+*.pyc
+user_data/hyperopt_results/hyperopt_tickerdata.pkl
+*.fthypt
