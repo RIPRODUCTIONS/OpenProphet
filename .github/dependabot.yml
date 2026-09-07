@@ -1,0 +1,31 @@
+# Dependabot configuration.
+#
+# WHY THIS FILE EXISTS. Measured 2026-09-06: this repository carried 9 critical alerts, and 8 of them
+# were `golang.org/x/crypto` in go.mod — untouched for months while npm bumps were opened and merged
+# normally. Security updates alone had not produced a single Go pull request. Without an explicit
+# gomod entry the Go module tree is effectively unwatched, so the eight sat open.
+#
+# Both ecosystems are now declared. If a future reader finds a critical alert with no matching pull
+# request, the ecosystem is probably missing from this list — add it rather than bumping by hand.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
