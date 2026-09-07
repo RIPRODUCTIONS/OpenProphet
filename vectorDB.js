@@ -1,7 +1,7 @@
 // vectorDB.js - Vector similarity search for trading decisions
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
-import { pipeline } from '@xenova/transformers';
+import { pipeline } from '@huggingface/transformers';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,7 +14,13 @@ let embedder = null;
 async function getEmbedder() {
   if (!embedder) {
     console.log('🔄 Loading local embedding model (first run may take 30s)...');
-    embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+    // dtype:'q8' is REQUIRED, not a tuning knob. @xenova/transformers v2 defaulted to
+    // the quantized weights; @huggingface/transformers defaults to fp32. Measured on
+    // the same input: fp32 output scores cosine 0.987659 against a v2 embedding, q8
+    // scores 1.000000. Every vector already in prophet_trader.db was written by the
+    // quantized model, so dropping this line silently makes stored and fresh vectors
+    // incomparable -- similarity search degrades and nothing errors.
+    embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { dtype: 'q8' });
     console.log('✅ Embedding model loaded');
   }
   return embedder;
