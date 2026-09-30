@@ -43,7 +43,7 @@
     "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.22.0",
     "@huggingface/transformers": "^4.2.0",
-    "axios": "1.18.0",
+    "axios": "1.20.0",
     "better-sqlite3": "^12.4.6",
     "ccxt": "^4.5.45",
     "cors": "^2.8.5",
