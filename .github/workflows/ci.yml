@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   ci:
-    uses: ./.github/workflows/node-web.yml
+    uses: RIPRODUCTIONS/ci-templates/.github/workflows/node-web.yml@main
     with:
       lint-script: ""
       typecheck-script: ""
