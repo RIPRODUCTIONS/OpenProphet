@@ -1,0 +1,107 @@
+# Reusable CI for npm-based web projects (Vite / Next / plain Node).
+# Steps: setup-node -> npm ci -> lint -> typecheck -> test -> build.
+# Any script that is empty or missing from package.json is skipped.
+name: node-web
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: 'JSON runner spec, e.g. "ubuntu-latest" or ["self-hosted","linux","x64"]'
+        type: string
+        default: '"ubuntu-latest"'
+      node-version:
+        type: string
+        default: "22"
+      working-directory:
+        type: string
+        default: "."
+      lint-script:
+        description: npm script for lint ("" to skip)
+        type: string
+        default: lint
+      typecheck-script:
+        description: npm script for typecheck ("" to skip)
+        type: string
+        default: typecheck
+      test-script:
+        description: npm script for tests ("" to skip)
+        type: string
+        default: test
+      build-script:
+        description: npm script for build ("" to skip)
+        type: string
+        default: build
+      dummy-env:
+        description: Newline-separated KEY=VALUE pairs exported for the job (placeholders only, never real secrets)
+        type: string
+        default: ""
+      timeout-minutes:
+        type: number
+        default: 15
+
+permissions:
+  contents: read
+
+jobs:
+  node-web:
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-node-web-${{ inputs.working-directory }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Random port + dummy env
+        env:
+          DUMMY_ENV: ${{ inputs.dummy-env }}
+        run: |
+          echo "PORT=$(( 20000 + RANDOM % 20000 ))" >> "$GITHUB_ENV"
+          while IFS= read -r line; do
+            [ -z "${line// }" ] && continue
+            case "$line" in \#*) continue ;; esac
+            if ! printf '%s' "$line" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*='; then
+              echo "::error::dummy-env line is not KEY=VALUE"; exit 1
+            fi
+            echo "$line" >> "$GITHUB_ENV"
+          done <<< "$DUMMY_ENV"
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        if: inputs.lint-script != ''
+        env:
+          SCRIPT: ${{ inputs.lint-script }}
+        run: npm run "$SCRIPT" --if-present
+
+      - name: Typecheck
+        if: inputs.typecheck-script != ''
+        env:
+          SCRIPT: ${{ inputs.typecheck-script }}
+        run: npm run "$SCRIPT" --if-present
+
+      - name: Test
+        if: inputs.test-script != ''
+        env:
+          SCRIPT: ${{ inputs.test-script }}
+        run: npm run "$SCRIPT" --if-present
+
+      - name: Build
+        if: inputs.build-script != ''
+        env:
+          SCRIPT: ${{ inputs.build-script }}
+        run: npm run "$SCRIPT" --if-present
